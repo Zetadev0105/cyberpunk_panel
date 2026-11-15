@@ -38,6 +38,7 @@ const state = {
   view: 'panel',
   viewParam: null,
   projectTab: 'tasks',
+  planTab: 'academic',
   tasks: [], notes: [], projects: [], plans: [], links: [], sessions: [],
   settings: {
     workDuration: 25,
@@ -598,10 +599,21 @@ function viewProjectDetail(id) {
 }
 
 function viewPlans() {
+  const activeTab = state.planTab || 'academic';
+  
+  // Filtramos los planes según la pestaña. Si no tienen tipo, asumimos 'academic'.
+  const currentPlans = state.plans.filter(p => (p.type || 'academic') === activeTab);
+
   return `
     <h2>Planes de Estudio · ${state.plans.length}</h2>
+    
+    <div class="tabs" style="margin-bottom: 1rem;">
+      <button class="${activeTab === 'academic' ? 'active' : ''}" onclick="state.planTab='academic'; render();">Académico</button>
+      <button class="${activeTab === 'personal' ? 'active' : ''}" onclick="state.planTab='personal'; render();">Personal</button>
+    </div>
+
     <div class="grid-auto">
-      ${state.plans.map(p => {
+      ${currentPlans.map(p => {
         const subs = p.subjects || [];
         const total = subs.reduce((s, x) => s + (x.topics || []).length, 0);
         const done = subs.reduce((s, x) => s + (x.topics || []).filter(t => t.done).length, 0);
@@ -609,9 +621,9 @@ function viewPlans() {
           ${p.image ? `<img class="card-image" src="${p.image}" alt="">` : ''}
           <h3>${escapeHtml(p.name)}</h3>
           <p style="font-size:12px; color:#666;">${escapeHtml(p.description || '')}</p>
-          <p style="font-size:11px; color:#888; margin-top:0.5rem;">${subs.length} materias · ${done}/${total} temas</p>
+          <p style="font-size:11px; color:#888; margin-top:0.5rem;">${subs.length} temas/secciones · ${done}/${total} completados</p>
         </div>`;
-      }).join('') || '<div class="empty">Sin planes.</div>'}
+      }).join('') || `<div class="empty">No hay planes en la categoría ${activeTab === 'academic' ? 'Académica' : 'Personal'} todavía.</div>`}
     </div>
   `;
 }
@@ -1286,12 +1298,27 @@ function editPlanForm(plan) {
     <form onsubmit="submitPlan(event, '${plan.id}')">
       <label>Nombre</label>
       <input type="text" id="plan-name" value="${escapeHtml(plan.name || '')}" required autofocus>
-      <label>Descripción</label>
-      <textarea id="plan-desc">${escapeHtml(plan.description || '')}</textarea>
+      
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.5rem;">
+        <div>
+          <label>Categoría</label>
+          <select id="plan-type">
+            <option value="academic" ${plan.type === 'personal' ? '' : 'selected'}>Académico (Escuela/Uni)</option>
+            <option value="personal" ${plan.type === 'personal' ? 'selected' : ''}>Personal (Hobbies/Skills)</option>
+          </select>
+        </div>
+        <div>
+          <label>Descripción</label>
+          <input type="text" id="plan-desc" value="${escapeHtml(plan.description || '')}">
+        </div>
+      </div>
+      
       ${imageFieldHTML('plan-image', plan.image || '')}
-      <label>Materias</label>
+      
+      <label>Materias / Secciones</label>
       <div id="subject-list"></div>
-      <button type="button" onclick="addSubjectRow()" style="margin-bottom:0.5rem;">+ Materia</button>
+      <button type="button" onclick="addSubjectRow()" style="margin-bottom:0.5rem;">+ Materia/Sección</button>
+      
       <div style="margin-top:0.5rem; display:flex; gap:0.5rem; justify-content:flex-end;">
         ${!plan.isNew ? `<button type="button" class="btn-danger" onclick="deletePlan('${plan.id}')" style="margin-right:auto;">Eliminar</button>` : ''}
         <button type="button" class="btn-ghost" onclick="closeModal()">Cancelar</button>
@@ -1302,6 +1329,7 @@ function editPlanForm(plan) {
   (plan.subjects || []).forEach(s => addSubjectRow(s.name, (s.topics || []).map(t => t.name).join('\n')));
   if (!(plan.subjects || []).length) addSubjectRow();
 }
+
 function addSubjectRow(name = '', topicsText = '') {
   const list = document.getElementById('subject-list');
   if (!list) return;
@@ -1316,9 +1344,11 @@ function addSubjectRow(name = '', topicsText = '') {
   `;
   list.appendChild(div);
 }
+
 async function submitPlan(e, id) {
   e.preventDefault();
   const existing = state.plans.find(x => x.id === id);
+  
   const subjects = [...document.querySelectorAll('#subject-list > div')].map(div => {
     const name = div.querySelector('.subject-name').value.trim();
     const topicsText = div.querySelector('.subject-topics').value;
@@ -1333,9 +1363,11 @@ async function submitPlan(e, id) {
       })
     };
   }).filter(s => s.name);
+
   const plan = {
     id,
     name: document.getElementById('plan-name').value.trim(),
+    type: document.getElementById('plan-type').value, // <-- GUARDAMOS LA CATEGORÍA
     description: document.getElementById('plan-desc').value.trim(),
     image: document.getElementById('plan-image').value || '',
     subjects,
@@ -1345,6 +1377,7 @@ async function submitPlan(e, id) {
   closeModal();
   render();
 }
+
 async function deletePlan(id) {
   if (!confirm('¿Eliminar plan de estudio?')) return;
   await deleteItem('plans', id, state.plans);
