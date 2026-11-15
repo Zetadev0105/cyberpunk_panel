@@ -646,9 +646,46 @@ function viewPlanDetail(id) {
         <button class="btn-danger" onclick="deletePlan('${id}')">Eliminar</button>
       </div>
     </div>
+    
     ${(p.subjects || []).map(sub => `
       <div class="card" style="margin-bottom:0.75rem;">
-        <h3>${escapeHtml(sub.name)}</h3>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+          <h3 style="margin:0;">${escapeHtml(sub.name)}</h3>
+          ${(p.type || 'academic') === 'academic' ? `<button class="btn-ghost" onclick="newExam('${p.id}', '${sub.id}')">+ Examen</button>` : ''}
+        </div>
+        
+        <!-- Lista de Exámenes -->
+        ${(sub.exams && sub.exams.length) ? `
+          <div style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-bottom:1rem;">
+            ${sub.exams.map(ex => {
+              const today = new Date(); today.setHours(0,0,0,0);
+              const exDate = new Date(ex.date + 'T00:00:00');
+              const diffTime = exDate - today;
+              const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+              
+              let color = 'var(--text)';
+              let bg = 'var(--surface-2)';
+              let border = '1px solid var(--border)';
+              let daysText = '';
+
+              if (diffDays >= 0 && diffDays <= 7) {
+                bg = 'rgba(255, 176, 0, 0.15)'; border = '1px solid var(--warning)'; color = 'var(--warning)';
+                daysText = ` (Faltan ${diffDays} días)`;
+              } else if (diffDays < 0) {
+                bg = 'rgba(255, 0, 60, 0.15)'; border = '1px solid var(--danger)'; color = 'var(--danger)';
+                daysText = ` (Vencido)`;
+              }
+
+              return `<div style="background:${bg}; border:${border}; color:${color}; border-radius:var(--radius-sm); padding:4px 8px; font-size:12px; cursor:pointer; display:flex; gap:0.5rem; align-items:center;" onclick="editExam('${p.id}','${sub.id}','${ex.id}')">
+                <span style="font-weight:bold;">${escapeHtml(ex.name)}</span>
+                <span style="text-transform:capitalize; opacity:0.8;">${escapeHtml(ex.type)}</span>
+                <span>${ex.date}${daysText}</span>
+              </div>`;
+            }).join('')}
+          </div>
+        ` : ''}
+
+        <!-- Lista de Temas -->
         ${(sub.topics || []).map(t => `<div class="task-row">
           <input type="checkbox" ${t.done ? 'checked' : ''} onchange="toggleTopic('${p.id}','${sub.id}','${t.id}')">
           <span class="title" style="${t.done ? 'text-decoration:line-through; opacity:0.55;' : ''}">${escapeHtml(t.name)}</span>
@@ -656,6 +693,83 @@ function viewPlanDetail(id) {
       </div>
     `).join('') || '<div class="empty">Sin materias.</div>'}
   `;
+}
+
+function newExam(planId, subjectId) {
+  editExamForm(planId, subjectId, null);
+}
+
+function editExam(planId, subjectId, examId) {
+  const p = state.plans.find(x => x.id === planId);
+  const sub = (p.subjects || []).find(x => x.id === subjectId);
+  const ex = sub.exams ? sub.exams.find(x => x.id === examId) : null;
+  editExamForm(planId, subjectId, ex);
+}
+
+function editExamForm(planId, subjectId, exam) {
+  openModal(`
+    <h3>${exam ? 'Editar Examen' : 'Nuevo Examen'}</h3>
+    <form onsubmit="submitExam(event, '${planId}', '${subjectId}', '${exam ? exam.id : ''}')">
+      <label>Nombre del Examen</label>
+      <input type="text" id="exam-name" value="${exam ? escapeHtml(exam.name) : ''}" placeholder="Ej: 1er Parcial" required autofocus>
+      
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.5rem;">
+        <div>
+          <label>Tipo</label>
+          <select id="exam-type">
+            <option value="normal" ${exam && exam.type === 'normal' ? 'selected' : ''}>Normal</option>
+            <option value="recuperatorio" ${exam && exam.type === 'recuperatorio' ? 'selected' : ''}>Recuperatorio</option>
+            <option value="trimestral" ${exam && exam.type === 'trimestral' ? 'selected' : ''}>Trimestral</option>
+            <option value="previa" ${exam && exam.type === 'previa' ? 'selected' : ''}>Previa</option>
+            <option value="global" ${exam && exam.type === 'global' ? 'selected' : ''}>Global</option>
+          </select>
+        </div>
+        <div>
+          <label>Fecha</label>
+          <input type="date" id="exam-date" value="${exam ? exam.date : ''}" required>
+        </div>
+      </div>
+
+      <div style="margin-top:1rem; display:flex; gap:0.5rem; justify-content:flex-end;">
+        ${exam ? `<button type="button" class="btn-danger" onclick="deleteExam('${planId}', '${subjectId}', '${exam.id}')" style="margin-right:auto;">Eliminar</button>` : ''}
+        <button type="button" class="btn-ghost" onclick="closeModal()">Cancelar</button>
+        <button type="submit" class="primary">Guardar</button>
+      </div>
+    </form>
+  `);
+}
+
+async function submitExam(e, planId, subjectId, examId) {
+  e.preventDefault();
+  const name = document.getElementById('exam-name').value.trim();
+  const date = document.getElementById('exam-date').value;
+  const type = document.getElementById('exam-type').value;
+  
+  const p = state.plans.find(x => x.id === planId);
+  const sub = p.subjects.find(x => x.id === subjectId);
+  
+  if (!sub.exams) sub.exams = [];
+  
+  if (examId) {
+    const ex = sub.exams.find(x => x.id === examId);
+    ex.name = name; ex.date = date; ex.type = type;
+  } else {
+    sub.exams.push({ id: uid(), name, date, type });
+  }
+  
+  await savePlan(p);
+  closeModal();
+  render();
+}
+
+async function deleteExam(planId, subjectId, examId) {
+  if (!confirm('¿Eliminar este examen?')) return;
+  const p = state.plans.find(x => x.id === planId);
+  const sub = p.subjects.find(x => x.id === subjectId);
+  sub.exams = sub.exams.filter(x => x.id !== examId);
+  await savePlan(p);
+  closeModal();
+  render();
 }
 
 function viewPomodoro() {
@@ -1354,20 +1468,22 @@ async function submitPlan(e, id) {
     const topicsText = div.querySelector('.subject-topics').value;
     const topicNames = topicsText.split('\n').map(s => s.trim()).filter(Boolean);
     const existingSub = existing && (existing.subjects || []).find(s => s.name === name);
+    
     return {
       id: existingSub ? existingSub.id : uid(),
       name,
+      exams: existingSub ? (existingSub.exams || []) : [], // <-- NUEVA LÍNEA PARA CONSERVAR EXÁMENES
       topics: topicNames.map(tn => {
         const et = existingSub && (existingSub.topics || []).find(t => t.name === tn);
         return { id: et ? et.id : uid(), name: tn, done: et ? et.done : false };
       })
     };
   }).filter(s => s.name);
-
+  
   const plan = {
     id,
     name: document.getElementById('plan-name').value.trim(),
-    type: document.getElementById('plan-type').value, // <-- GUARDAMOS LA CATEGORÍA
+    type: document.getElementById('plan-type').value,
     description: document.getElementById('plan-desc').value.trim(),
     image: document.getElementById('plan-image').value || '',
     subjects,
