@@ -421,12 +421,35 @@ function viewPanel() {
   const todayTasks = state.tasks.filter(t => t.status === 'pending' && t.dueDate === today);
   const recentNotes = [...state.notes].sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || '')).slice(0, 6);
   const globalLinks = state.links.filter(l => !l.projectId);
+
+    // Buscar temas que tocan repasar hoy
+  const dueTopics = [];
+  state.plans.forEach(p => {
+    (p.subjects || []).forEach(sub => {
+      (sub.topics || []).forEach(t => {
+        if (t.done && t.nextReview && t.nextReview <= today) {
+          dueTopics.push({ planId: p.id, planName: p.name, subjName: sub.name, topicName: t.name, topicId: t.id, subjId: sub.id });
+        }
+      });
+    });
+  });
   return `
     <h2>Panel Principal</h2>
     <div class="panel-grid">
       <div class="card"><h3>Pomodoro</h3>${timerWidgetHTML(false)}</div>
       <div class="card">
         <h3>Hoy · ${todayTasks.length + overdue.length}</h3>
+              <div class="card">
+        <h3 style="color:var(--warning);">Repasos · ${dueTopics.length}</h3>
+        <div class="card-body">
+          ${dueTopics.slice(0, 8).map(dt => `
+            <div class="task-row" style="cursor:pointer;" onclick="state.view='plan'; state.viewParam='${dt.planId}'; render();">
+              <span class="title" style="font-size:12px;">${escapeHtml(dt.topicName)}</span>
+              <span class="meta" style="font-size:10px;">${escapeHtml(dt.planName)}</span>
+            </div>
+          `).join('') || '<div class="empty">¡Todo al día!</div>'}
+        </div>
+      </div>
         <div class="card-body">
           ${overdue.length ? `<p style="color:#c33; font-size:11px; margin-bottom:0.3rem;">Vencidas: ${overdue.length}</p>` : ''}
           ${sortTasks(overdue.concat(todayTasks)).slice(0, 12).map(t => `<div class="task-row priority-${t.priority || 'low'}">
@@ -476,11 +499,42 @@ function viewToday() {
   const overdue = state.tasks.filter(t => t.status === 'pending' && t.dueDate && t.dueDate < today);
   const todayTasks = state.tasks.filter(t => t.status === 'pending' && t.dueDate === today);
   const next7 = state.tasks.filter(t => t.status === 'pending' && t.dueDate && t.dueDate > today && t.dueDate <= addDays(today, 7));
+
+  // AGREGADO: Calculamos los temas que tocan repasar hoy
+  const dueTopics = [];
+  state.plans.forEach(p => {
+    (p.subjects || []).forEach(sub => {
+      (sub.topics || []).forEach(t => {
+        if (t.done && t.nextReview && t.nextReview <= today) {
+          dueTopics.push({ planId: p.id, planName: p.name, subjName: sub.name, topicName: t.name });
+        }
+      });
+    });
+  });
+
   return `
     <h2>Hoy · ${today}</h2>
+    
+    <!-- AGREGADO: Bloque de Repasos -->
+    ${dueTopics.length ? `
+      <div class="card" style="margin-bottom:1.5rem;">
+        <h3 style="color:var(--warning); margin-bottom:0.5rem;">Repasos pendientes · ${dueTopics.length}</h3>
+        <div class="card-body">
+          ${dueTopics.map(dt => `
+            <div class="task-row" style="cursor:pointer;" onclick="state.view='plan'; state.viewParam='${dt.planId}'; render();">
+              <span class="title" style="font-size:13px; color:var(--text);">${escapeHtml(dt.topicName)}</span>
+              <span class="meta" style="font-size:11px;">${escapeHtml(dt.planName)} > ${escapeHtml(dt.subjName)}</span>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    ` : ''}
+
     ${overdue.length ? `<h3 style="color:#c33;">Vencidas · ${overdue.length}</h3>${overdue.map(taskRow).join('')}` : ''}
+    
     <h3 style="margin-top:1rem;">Tareas de hoy · ${todayTasks.length}</h3>
     ${todayTasks.map(taskRow).join('') || '<div class="empty">Sin tareas para hoy.</div>'}
+    
     <h3 style="margin-top:1rem;">Próximos 7 días · ${next7.length}</h3>
     ${next7.map(taskRow).join('') || '<div class="empty">Sin tareas próximas.</div>'}
   `;
@@ -688,55 +742,21 @@ function viewPlanDetail(id) {
         ` : ''}
 
         <!-- Lista de Temas -->
-        ${(sub.topics || []).map(t => `<div class="task-row">
-          <input type="checkbox" ${t.done ? 'checked' : ''} onchange="toggleTopic('${p.id}','${sub.id}','${t.id}')" onclick="event.stopPropagation()">
-          <span class="title" onclick="editTopic('${p.id}','${sub.id}','${t.id}')" style="${t.done ? 'text-decoration:line-through; opacity:0.55;' : ''}">
-            ${escapeHtml(t.name)}
-          </span>
-          ${(t.links && t.links.length) ? `<span class="tag" style="margin-left:auto; font-size:10px; color:var(--info);">🔗 ${t.links.length}</span>` : ''}
-          ${!t.done ? `<button class="btn-play" onclick="event.stopPropagation(); startTopicSession('${p.id}','${sub.id}','${t.id}')" title="Estudiar este tema">▶</button>` : ''}
-        </div>`).join('') || '<div class="empty">Sin temas.</div>'}
-      
+        ${(sub.topics || []).map(t => {
+          const isDue = t.done && t.nextReview && t.nextReview <= todayStr();
+          return `<div class="task-row">
+            <input type="checkbox" ${t.done ? 'checked' : ''} onchange="toggleTopic('${p.id}','${sub.id}','${t.id}')" onclick="event.stopPropagation()">
+            <span class="title" onclick="editTopic('${p.id}','${sub.id}','${t.id}')" style="${t.done ? 'text-decoration:line-through; opacity:0.55;' : ''}">
+              ${escapeHtml(t.name)}
+            </span>
+            ${isDue ? `<span class="tag" style="background:rgba(255,176,0,0.15); border-color:var(--warning); color:var(--warning); margin-left:auto;">⚠️ Repasar</span>` : ''}
+            ${(t.links && t.links.length) ? `<span class="tag" style="font-size:10px; color:var(--info); ${isDue ? '' : 'margin-left:auto;'}">🔗 ${t.links.length}</span>` : ''}
+            ${!t.done ? `<button class="btn-play" onclick="event.stopPropagation(); startTopicSession('${p.id}','${sub.id}','${t.id}')" title="Estudiar este tema">▶</button>` : ''}
+          </div>`;
+        }).join('') || '<div class="empty">Sin temas.</div>'}
       </div>
     `).join('') || '<div class="empty">Sin materias.</div>'}
   `;
-}
-
-function editTopic(planId, subjectId, topicId) {
-  const p = state.plans.find(x => x.id === planId);
-  const sub = p.subjects.find(x => x.id === subjectId);
-  const topic = sub.topics.find(x => x.id === topicId);
-  if (!topic) return;
-
-  openModal(`
-    <h3>${escapeHtml(topic.name)}</h3>
-    <form onsubmit="submitTopic(event, '${planId}', '${subjectId}', '${topicId}')">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem; background:var(--surface-2); padding:0.5rem; border-radius:var(--radius-md);">
-        <span style="font-size:12px; color:var(--text-muted);">⏱️ Tiempo de estudio: <strong>${formatDuration(topic.studyTime || 0)}</strong></span>
-        <label style="display:flex; align-items:center; gap:0.5rem; margin:0; cursor:pointer; text-transform:none; font-size:13px;">
-          <input type="checkbox" id="topic-done" ${topic.done ? 'checked' : ''} style="width:auto; margin:0;">
-          Tema Completado
-        </label>
-      </div>
-
-      <label>Apuntes (Markdown)</label>
-      <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.5rem; margin-bottom:1rem;">
-        <textarea id="topic-content" style="min-height:200px;" oninput="document.getElementById('topic-preview').innerHTML = md(this.value)">${escapeHtml(topic.content || '')}</textarea>
-        <div id="topic-preview" class="md-preview" style="min-height:200px; max-height:200px; overflow-y:auto;">${md(topic.content || '')}</div>
-      </div>
-
-      <label>Recursos y Links</label>
-      <div id="topic-links-list"></div>
-      <button type="button" onclick="addTopicLinkRow()" style="margin-bottom:0.5rem; font-size:12px;">+ Agregar Link</button>
-
-      <div style="margin-top:1rem; display:flex; gap:0.5rem; justify-content:flex-end;">
-        <button type="button" class="btn-ghost" onclick="closeModal()">Cancelar</button>
-        <button type="submit" class="primary">Guardar Tema</button>
-      </div>
-    </form>
-  `);
-
-  (topic.links || []).forEach(l => addTopicLinkRow(l.title, l.url));
 }
 
 function addTopicLinkRow(title = '', url = '') {
@@ -1680,17 +1700,19 @@ async function submitPlan(e, id) {
       id: existingSub ? existingSub.id : uid(),
       name,
       exams: existingSub ? (existingSub.exams || []) : [], // Conserva exámenes
-      topics: topicNames.map(tn => {
+            topics: topicNames.map(tn => {
         const et = existingSub && (existingSub.topics || []).find(t => t.name === tn);
         return { 
           id: et ? et.id : uid(), 
           name: tn, 
           done: et ? et.done : false,
-          content: et ? (et.content || '') : '',     // Conserva apuntes
-          links: et ? (et.links || []) : [],         // Conserva links
-          studyTime: et ? (et.studyTime || 0) : 0    // Conserva tiempo
+          content: et ? (et.content || '') : '',
+          links: et ? (et.links || []) : [],
+          studyTime: et ? (et.studyTime || 0) : 0,
+          interval: et ? (et.interval || 0) : 0,         // <-- NUEVO
+          nextReview: et ? (et.nextReview || null) : null // <-- NUEVO
         };
-      }) // Cerramos el map de temas
+      })
     }; // Cerramos el objeto de la materia
   }).filter(s => s.name); // Cerramos el map de materias y filtramos
   
@@ -1724,8 +1746,76 @@ async function toggleTopic(planId, subjId, topicId) {
   if (!sub) return;
   const topic = (sub.topics || []).find(t => t.id === topicId);
   if (!topic) return;
-  topic.done = !topic.done;
+
+  // Si estaba sin hacer, abrimos el modal de repaso
+  if (!topic.done) {
+    openRatingModal(planId, subjId, topicId);
+  } else {
+    // Si ya estaba hecho y lo destildan, se resetea el repaso
+    topic.done = false;
+    topic.interval = 0;
+    topic.nextReview = null;
+    await savePlan(p);
+    render();
+  }
+}
+
+function openRatingModal(planId, subjId, topicId) {
+  const p = state.plans.find(x => x.id === planId);
+  const sub = p.subjects.find(s => s.id === subjId);
+  const topic = sub.topics.find(t => t.id === topicId);
+
+  openModal(`
+    <h3>¿Qué tan bien recordás este tema?</h3>
+    <p style="font-size:13px; color:var(--text-muted); margin-bottom:1.5rem; text-align:center;">
+      "${escapeHtml(topic.name)}"
+    </p>
+    <div style="display:flex; gap:0.5rem; justify-content:center; margin-bottom:1rem;">
+      <button class="btn-danger" onclick="submitRating('${planId}','${subjId}','${topicId}','hard')" style="flex:1; padding:1rem 0.5rem; flex-direction:column; height:auto;">
+        <span style="font-size:1.5rem; display:block; margin-bottom:0.5rem;">🔴</span>
+        <span style="font-weight:bold;">Difícil</span>
+        <span style="font-size:11px; opacity:0.8; margin-top:0.2rem;">Repasar mañana</span>
+      </button>
+      <button class="primary" onclick="submitRating('${planId}','${subjId}','${topicId}','normal')" style="flex:1; padding:1rem 0.5rem; flex-direction:column; height:auto;">
+        <span style="font-size:1.5rem; display:block; margin-bottom:0.5rem;">🟡</span>
+        <span style="font-weight:bold;">Normal</span>
+        <span style="font-size:11px; opacity:0.8; margin-top:0.2rem;">En unos días</span>
+      </button>
+      <button class="btn-ghost" onclick="submitRating('${planId}','${subjId}','${topicId}','easy')" style="flex:1; padding:1rem 0.5rem; flex-direction:column; height:auto; border:1px solid var(--success); color:var(--success);">
+        <span style="font-size:1.5rem; display:block; margin-bottom:0.5rem;">🟢</span>
+        <span style="font-weight:bold;">Fácil</span>
+        <span style="font-size:11px; opacity:0.8; margin-top:0.2rem;">En varias semanas</span>
+      </button>
+    </div>
+    <div style="text-align:center;">
+      <button class="btn-ghost" onclick="closeModal()">Cancelar</button>
+    </div>
+  `);
+}
+
+async function submitRating(planId, subjId, topicId, rating) {
+  const p = state.plans.find(x => x.id === planId);
+  const sub = p.subjects.find(s => s.id === subjId);
+  const topic = sub.topics.find(t => t.id === topicId);
+  
+  topic.done = true;
+  let interval = topic.interval || 0;
+  
+  // Lógica de repaso espaciado
+  if (rating === 'easy') {
+    interval = interval === 0 ? 4 : Math.ceil(interval * 3);
+  } else if (rating === 'normal') {
+    interval = interval === 0 ? 2 : Math.ceil(interval * 2);
+  } else {
+    interval = 1; // Difícil siempre vuelve al día siguiente
+  }
+  
+  topic.interval = interval;
+  // Calculamos la próxima fecha usando nuestra función addDays
+  topic.nextReview = addDays(todayStr(), interval);
+  
   await savePlan(p);
+  closeModal();
   render();
 }
 
