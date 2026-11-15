@@ -378,7 +378,9 @@ function timerWidgetHTML(big) {
 
     <div class="timer-actions">
       <button onclick="toggleTimer()">Start / Pause</button>
-      <button onclick="resetTimer(); render();">Reset</button>
+      ${timer.currentSession 
+        ? `<button class="btn-danger" onclick="stopTimerAndSave()">Detener y Guardar</button>` 
+        : `<button class="btn-ghost" onclick="resetTimer(); render();">Reset</button>`}
     </div>
   </div>`;
 }
@@ -641,11 +643,13 @@ function viewPomodoro() {
           ${locked ? `<p style="font-size:11px; color:#888; margin-top:0.25rem;">Sesión en curso: los selectores se bloquean. Usá Reset para cambiarlos.</p>` : ''}
         </div>
         ${timerWidgetHTML(true)}
-        <div style="display:flex; gap:0.4rem; justify-content:center; margin-top:0.75rem; flex-wrap:wrap;">
+        
+        <div style="display:flex; gap:0.4rem; justify-content:center; margin-top:0.75rem; margin-bottom: 1.5rem; flex-wrap:wrap;">
           <button onclick="setTimerMode('pomodoro')">Pomodoro</button>
           <button onclick="setTimerMode('stopwatch')">Cronómetro</button>
           ${timer.mode === 'stopwatch' && timer.currentSession ? `<button onclick="saveAndStopStopwatch()" class="primary">Guardar sesión</button>` : ''}
         </div>
+        
       </div>
       <div class="card">
         <h3>Configuración</h3>
@@ -728,7 +732,7 @@ function viewTimeUsage() {
       </div>
     </div>
 
-        ${activeSession ? `
+            ${activeSession ? `
       <div class="card active-session" style="margin-bottom:1rem;">
         <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem;">
           
@@ -748,7 +752,7 @@ function viewTimeUsage() {
             <div style="font-family:var(--font-display); font-size:1.8rem; font-weight:bold; color:var(--success); text-shadow:0 0 10px rgba(0,255,159,0.5);" data-usage-active-time>
               ${formatDuration(activeDuration)}
             </div>
-            <button class="btn-danger" onclick="resetTimer(); render();" style="height:fit-content; padding: 0.5rem 1rem;">
+            <button class="btn-danger" onclick="stopTimerAndSave()" style="height:fit-content; padding: 0.5rem 1rem;">
               Detener
             </button>
           </div>
@@ -1426,7 +1430,17 @@ function pauseTimer() {
   saveTimerState(); // Guardamos
 }
 
-function toggleTimer() { timer.running ? pauseTimer() : startTimer(); }
+function toggleTimer() { 
+  timer.running ? pauseTimer() : startTimer(); 
+  render(); // <-- Forzamos a que la pantalla se actualice para mostrar el botón
+}
+
+async function stopTimerAndSave() {
+  if (!timer.currentSession) return;
+  await finalizeSession();
+  resetTimer(); // Resetea el reloj visualmente
+  render();     // Actualiza la pantalla
+}
 
 function resetTimer() {
   pauseTimer();
@@ -1441,7 +1455,11 @@ function resetTimer() {
   saveTimerState(); // Guardamos
 }
 
-function setTimerMode(mode) {
+async function setTimerMode(mode) {
+  if (timer.currentSession) {
+    if (!confirm('Hay una sesión en curso. ¿Deseas guardar el progreso y cambiar de modo?')) return;
+    await finalizeSession();
+  }
   pauseTimer();
   timer.currentSession = null;
   timer.mode = mode;
@@ -1451,16 +1469,24 @@ function setTimerMode(mode) {
   } else {
     timer.elapsed = 0;
   }
+  saveTimerState();
   render();
-  saveTimerState(); // Guardamos
 }
 
 async function finalizeSession() {
   if (!timer.currentSession) return;
   const cs = timer.currentSession;
-  const duration = cs.type === 'stopwatch'
-    ? timer.elapsed
-    : (cs.type === 'break' ? state.settings.breakDuration * 60 : state.settings.workDuration * 60);
+  
+  // Calculamos el tiempo REAL transcurrido
+  let duration = 0;
+  if (cs.type === 'stopwatch') {
+    duration = timer.elapsed;
+  } else if (cs.type === 'break') {
+    duration = (state.settings.breakDuration * 60) - Math.max(0, timer.remaining);
+  } else {
+    duration = (state.settings.workDuration * 60) - Math.max(0, timer.remaining);
+  }
+
   if (duration <= 0) { timer.currentSession = null; return; }
   
   const session = {
@@ -1470,7 +1496,7 @@ async function finalizeSession() {
     projectName: cs.projectName,
     taskId: cs.taskId,
     taskTitle: cs.taskTitle,
-    duration,
+    duration: duration,
     startedAt: cs.startedAt,
     endedAt: new Date().toISOString()
   };
@@ -1478,7 +1504,7 @@ async function finalizeSession() {
   await DB.put('sessions', session);
   state.sessions.push(session);
   timer.currentSession = null;
-  localStorage.removeItem('pcb_timer_state'); // <-- Limpiamos al guardar en DB
+  localStorage.removeItem('pcb_timer_state');
 }
 
 async function tickTimer() {
@@ -1507,14 +1533,6 @@ async function tickTimer() {
   }
   updateTimerDisplays();
   saveTimerState(); // Guardamos
-}
-
-async function saveAndStopStopwatch() {
-  if (!timer.currentSession) return;
-  await finalizeSession();
-  timer.elapsed = 0;
-  pauseTimer();
-  render();
 }
 
 function updateTimerDisplays() {
