@@ -82,11 +82,18 @@ body {
   gap: var(--gap-header);
   margin-bottom: var(--pad-block);
   align-items: stretch;
+  flex-wrap: nowrap;
 }
 
 #main-header input {
   flex: 1;
   margin: 0;
+  min-width: 150px
+}
+
+#main-header button,
+#header-view-actions {
+  flex-shrink: 0;
 }
 
 h2 {

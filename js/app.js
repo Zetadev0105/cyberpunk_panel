@@ -270,15 +270,12 @@ function render() {
       || (state.view === 'plan'    && a.dataset.view === 'plans');
     a.classList.toggle('active', active);
 
-    // Lógica para mostrar el nombre del proyecto/plan en el sidebar
     if (a.dataset.view === 'projects') {
       if (state.view === 'project') {
         const p = state.projects.find(x => x.id === state.viewParam);
         if (p) a.innerHTML = `Proyectos <span class="sidebar-sub">↳ ${escapeHtml(p.name)}</span>`;
         else a.innerHTML = 'Proyectos';
-      } else {
-        a.innerHTML = 'Proyectos';
-      }
+      } else { a.innerHTML = 'Proyectos'; }
     }
 
     if (a.dataset.view === 'plans') {
@@ -286,22 +283,36 @@ function render() {
         const p = state.plans.find(x => x.id === state.viewParam);
         if (p) a.innerHTML = `Planes de Estudio <span class="sidebar-sub">↳ ${escapeHtml(p.name)}</span>`;
         else a.innerHTML = 'Planes de Estudio';
-      } else {
-        a.innerHTML = 'Planes de Estudio';
-      }
+      } else { a.innerHTML = 'Planes de Estudio'; }
     }
   });
+
+  // Limpiamos los botones contextuales de la cabecera
+  const headerActions = document.getElementById('header-view-actions');
+  if (headerActions) headerActions.innerHTML = '';
 
   const main = $('#main-content');
   switch (state.view) {
     case 'panel':     main.innerHTML = viewPanel();                break;
     case 'today':     main.innerHTML = viewToday();                break;
-    case 'inbox':     main.innerHTML = viewInbox();                break;
-    case 'projects':  main.innerHTML = viewProjects();             break;
+    case 'inbox':     
+      main.innerHTML = viewInbox();                
+      break;
+    case 'projects':  
+      main.innerHTML = viewProjects();             
+      if (headerActions) headerActions.innerHTML = `<button onclick="newProject()">+ Proyecto</button>`;
+      break;
     case 'project':   main.innerHTML = viewProjectDetail(state.viewParam); break;
-    case 'tasks':     main.innerHTML = viewTasks();                break;
-    case 'notes':     main.innerHTML = viewNotes();                break;
-    case 'plans':     main.innerHTML = viewPlans();                break;
+    case 'tasks':     
+      main.innerHTML = viewTasks();                
+      break;
+    case 'notes':     
+      main.innerHTML = viewNotes();                
+      break;
+    case 'plans':     
+      main.innerHTML = viewPlans();                
+      if (headerActions) headerActions.innerHTML = `<button onclick="newPlan()">+ Plan</button>`;
+      break;
     case 'plan':      main.innerHTML = viewPlanDetail(state.viewParam); break;
     case 'pomodoro':  main.innerHTML = viewPomodoro();             break;
     case 'timeusage': main.innerHTML = viewTimeUsage();            break;
@@ -449,10 +460,7 @@ function viewToday() {
 function viewInbox() {
   const inbox = state.tasks.filter(t => !t.projectId && t.status !== 'archived');
   return `
-    <div class="section-header">
-      <h2>Inbox · ${inbox.length}</h2>
-      <button onclick="newTask(null)">+ Tarea</button>
-    </div>
+    <h2>Inbox · ${inbox.length}</h2>
     <p style="font-size:12px; color:#666; margin-bottom:0.75rem;">Tareas sin proyecto asignado.</p>
     ${inbox.map(taskRow).join('') || '<div class="empty">Sin tareas en Inbox.</div>'}
   `;
@@ -461,10 +469,7 @@ function viewInbox() {
 function viewTasks() {
   const tasks = [...state.tasks].sort((a, b) => (a.status === 'done') - (b.status === 'done') || (a.dueDate || '9999').localeCompare(b.dueDate || '9999'));
   return `
-    <div class="section-header">
-      <h2>Tareas · ${tasks.length}</h2>
-      <button onclick="newTask(currentProjectContext())">+ Tarea</button>
-    </div>
+    <h2>Tareas · ${tasks.length}</h2>
     ${tasks.map(taskRow).join('') || '<div class="empty">Sin tareas.</div>'}
   `;
 }
@@ -472,10 +477,7 @@ function viewTasks() {
 function viewNotes() {
   const sorted = [...state.notes].sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
   return `
-    <div class="section-header">
-      <h2>Notas · ${sorted.length}</h2>
-      <button onclick="newNote(currentProjectContext())">+ Nota</button>
-    </div>
+    <h2>Notas · ${sorted.length}</h2>
     <div class="notes-grid">
       <div class="note-card new-note" onclick="newNote(currentProjectContext())">+ Nueva nota</div>
       ${sorted.map(n => `
@@ -493,10 +495,7 @@ function viewNotes() {
 
 function viewProjects() {
   return `
-    <div class="section-header">
-      <h2>Proyectos · ${state.projects.length}</h2>
-      <button onclick="newProject()">+ Proyecto</button>
-    </div>
+    <h2>Proyectos · ${state.projects.length}</h2>
     <div class="grid-auto">
       ${state.projects.map(p => {
         const pending = state.tasks.filter(t => t.projectId === p.id && t.status === 'pending').length;
@@ -569,10 +568,7 @@ function viewProjectDetail(id) {
 
 function viewPlans() {
   return `
-    <div class="section-header">
-      <h2>Planes de Estudio · ${state.plans.length}</h2>
-      <button onclick="newPlan()">+ Plan</button>
-    </div>
+    <h2>Planes de Estudio · ${state.plans.length}</h2>
     <div class="grid-auto">
       ${state.plans.map(p => {
         const subs = p.subjects || [];

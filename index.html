@@ -35,11 +35,13 @@
     </aside>
 
     <main id="main">
-      <div id="main-header">
-        <input type="search" id="search-main" placeholder="Buscar tareas, notas, etiquetas...">
-        <button onclick="newTask(currentProjectContext())">+ Tarea</button>
-        <button onclick="newNote(currentProjectContext())">+ Nota</button>
-      </div>
+          <div id="main-header">
+            <input type="search" id="search-main" placeholder="Buscar tareas, notas, etiquetas...">
+            <button onclick="newTask(currentProjectContext())">+ Tarea</button>
+            <button onclick="newNote(currentProjectContext())">+ Nota</button>
+            <!-- Contenedor nuevo para botones contextuales -->
+          <div id="header-view-actions" style="display:flex; gap:0.5rem;"></div>
+    </div>
       <div id="main-content"></div>
     </main>
   </div>
