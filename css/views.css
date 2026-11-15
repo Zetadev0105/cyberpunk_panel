@@ -204,6 +204,12 @@
   padding-left: 1.5rem;
 }
 
+/* --- Editor de Temas --- */
+#topic-preview {
+  background: var(--surface-input);
+  border-color: var(--border);
+}
+
 /* --- Responsive específico de vistas --- */
 @media (max-width: 760px) {
   .panel-grid {

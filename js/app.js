@@ -687,12 +687,88 @@ function viewPlanDetail(id) {
 
         <!-- Lista de Temas -->
         ${(sub.topics || []).map(t => `<div class="task-row">
-          <input type="checkbox" ${t.done ? 'checked' : ''} onchange="toggleTopic('${p.id}','${sub.id}','${t.id}')">
-          <span class="title" style="${t.done ? 'text-decoration:line-through; opacity:0.55;' : ''}">${escapeHtml(t.name)}</span>
+          <input type="checkbox" ${t.done ? 'checked' : ''} onchange="toggleTopic('${p.id}','${sub.id}','${t.id}')" onclick="event.stopPropagation()">
+          <span class="title" onclick="editTopic('${p.id}','${sub.id}','${t.id}')" style="${t.done ? 'text-decoration:line-through; opacity:0.55;' : ''}">
+            ${escapeHtml(t.name)}
+          </span>
+          ${(t.links && t.links.length) ? `<span class="tag" style="margin-left:auto; font-size:10px; color:var(--info);">🔗 ${t.links.length}</span>` : ''}
+          ${!t.done ? `<button class="btn-play" onclick="event.stopPropagation(); startTopicSession('${p.id}','${sub.id}','${t.id}')" title="Estudiar este tema">▶</button>` : ''}
         </div>`).join('') || '<div class="empty">Sin temas.</div>'}
+      
       </div>
     `).join('') || '<div class="empty">Sin materias.</div>'}
   `;
+}
+
+function editTopic(planId, subjectId, topicId) {
+  const p = state.plans.find(x => x.id === planId);
+  const sub = p.subjects.find(x => x.id === subjectId);
+  const topic = sub.topics.find(x => x.id === topicId);
+  if (!topic) return;
+
+  openModal(`
+    <h3>${escapeHtml(topic.name)}</h3>
+    <form onsubmit="submitTopic(event, '${planId}', '${subjectId}', '${topicId}')">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem; background:var(--surface-2); padding:0.5rem; border-radius:var(--radius-md);">
+        <span style="font-size:12px; color:var(--text-muted);">⏱️ Tiempo de estudio: <strong>${formatDuration(topic.studyTime || 0)}</strong></span>
+        <label style="display:flex; align-items:center; gap:0.5rem; margin:0; cursor:pointer; text-transform:none; font-size:13px;">
+          <input type="checkbox" id="topic-done" ${topic.done ? 'checked' : ''} style="width:auto; margin:0;">
+          Tema Completado
+        </label>
+      </div>
+
+      <label>Apuntes (Markdown)</label>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.5rem; margin-bottom:1rem;">
+        <textarea id="topic-content" style="min-height:200px;" oninput="document.getElementById('topic-preview').innerHTML = md(this.value)">${escapeHtml(topic.content || '')}</textarea>
+        <div id="topic-preview" class="md-preview" style="min-height:200px; max-height:200px; overflow-y:auto;">${md(topic.content || '')}</div>
+      </div>
+
+      <label>Recursos y Links</label>
+      <div id="topic-links-list"></div>
+      <button type="button" onclick="addTopicLinkRow()" style="margin-bottom:0.5rem; font-size:12px;">+ Agregar Link</button>
+
+      <div style="margin-top:1rem; display:flex; gap:0.5rem; justify-content:flex-end;">
+        <button type="button" class="btn-ghost" onclick="closeModal()">Cancelar</button>
+        <button type="submit" class="primary">Guardar Tema</button>
+      </div>
+    </form>
+  `);
+
+  (topic.links || []).forEach(l => addTopicLinkRow(l.title, l.url));
+}
+
+function addTopicLinkRow(title = '', url = '') {
+  const list = document.getElementById('topic-links-list');
+  if (!list) return;
+  const row = document.createElement('div');
+  row.style.cssText = 'display:flex; gap:0.3rem; margin-bottom:0.3rem; align-items:center;';
+  row.innerHTML = `
+    <input type="text" class="link-title" placeholder="Título del Link" value="${escapeHtml(title)}" style="flex:1; margin:0;">
+    <input type="url" class="link-url" placeholder="https://..." value="${escapeHtml(url)}" style="flex:2; margin:0;">
+    <button type="button" onclick="this.parentElement.remove()" class="btn-ghost" style="padding:2px 6px;">×</button>
+  `;
+  list.appendChild(row);
+}
+
+async function submitTopic(e, planId, subjectId, topicId) {
+  e.preventDefault();
+  const p = state.plans.find(x => x.id === planId);
+  const sub = p.subjects.find(x => x.id === subjectId);
+  const topic = sub.topics.find(x => x.id === topicId);
+  if (!topic) return;
+
+  topic.content = document.getElementById('topic-content').value;
+  topic.done = document.getElementById('topic-done').checked;
+
+  topic.links = [...document.querySelectorAll('#topic-links-list > div')].map(row => ({
+    id: uid(),
+    title: row.querySelector('.link-title').value.trim(),
+    url: row.querySelector('.link-url').value.trim()
+  })).filter(l => l.title || l.url);
+
+  await savePlan(p);
+  closeModal();
+  render();
 }
 
 function newExam(planId, subjectId) {
@@ -773,33 +849,95 @@ async function deleteExam(planId, subjectId, examId) {
 }
 
 function viewPomodoro() {
-  const ctx = state.settings.timerContext || { projectId: '', taskId: '' };
+  // Aseguramos que el contexto tenga la propiedad 'type'
+  const ctx = state.settings.timerContext || { type: 'project', projectId: '', taskId: '', planId: '', subjectId: '', topicId: '' };
+  if (!ctx.type) ctx.type = 'project'; // Retrocompatibilidad
+  
+  const isStudy = ctx.type === 'plan';
+  
+  // Variables para los selects de Proyecto
   const projectOptions = state.projects.map(p => `<option value="${p.id}" ${p.id === ctx.projectId ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('');
   const tasksInProject = ctx.projectId ? state.tasks.filter(t => t.projectId === ctx.projectId && t.status !== 'done') : [];
   const taskOptions = tasksInProject.map(t => `<option value="${t.id}" ${t.id === ctx.taskId ? 'selected' : ''}>${escapeHtml(t.title)}</option>`).join('');
-  const locked = !!timer.currentSession;
   
+  // Variables para los selects de Plan
+  const planOptions = state.plans.map(p => `<option value="${p.id}" ${p.id === ctx.planId ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('');
+  const selectedPlan = state.plans.find(p => p.id === ctx.planId);
+  const subjectsInPlan = selectedPlan ? (selectedPlan.subjects || []) : [];
+  const subjectOptions = subjectsInPlan.map(s => `<option value="${s.id}" ${s.id === ctx.subjectId ? 'selected' : ''}>${escapeHtml(s.name)}</option>`).join('');
+  const selectedSubject = subjectsInPlan.find(s => s.id === ctx.subjectId);
+  const topicsInSubject = selectedSubject ? (selectedSubject.topics || []) : [];
+  const topicOptions = topicsInSubject.map(t => `<option value="${t.id}" ${t.id === ctx.topicId ? 'selected' : ''}>${escapeHtml(t.name)}</option>`).join('');
+
+  const locked = !!timer.currentSession;
+
+  // Generamos el texto indicador de la sesión actual
+  let sessionLabel = '';
+  if (isStudy) {
+    const plan = state.plans.find(p => p.id === ctx.planId);
+    const sub = plan ? (plan.subjects || []).find(s => s.id === ctx.subjectId) : null;
+    const top = sub ? (sub.topics || []).find(t => t.id === ctx.topicId) : null;
+    if (plan) sessionLabel = `<span style="color:var(--info); font-weight:bold;">📚 Estudiando:</span> ${escapeHtml(plan.name)} ${sub ? '> ' + escapeHtml(sub.name) : ''} ${top ? '> ' + escapeHtml(top.name) : ''}`;
+  } else {
+    const proj = state.projects.find(p => p.id === ctx.projectId);
+    const task = state.tasks.find(t => t.id === ctx.taskId);
+    if (proj || task) sessionLabel = `<span style="color:var(--accent); font-weight:bold;">💼 Trabajando:</span> ${proj ? escapeHtml(proj.name) : ''} ${task ? '> ' + escapeHtml(task.title) : ''}`;
+  }
+
   return `
     <h2>Pomodoro</h2>
     <div class="grid-auto" style="grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));">
-      <div class="card" style="display:flex; flex-direction:column; min-height: 420px; padding-bottom: 1.5rem;">
-        <div style="margin-bottom:0.5rem;">
-          <label>Proyecto</label>
-          <select id="timer-project-select" onchange="onTimerProjectChange(this.value)" ${locked ? 'disabled' : ''}>
-            <option value="">Sin proyecto</option>
-            ${projectOptions}
-          </select>
-          ${ctx.projectId ? `
-            <label>Tarea</label>
-            <select id="timer-task-select" onchange="onTimerTaskChange(this.value)" ${locked ? 'disabled' : ''}>
-              <option value="">Sin tarea</option>
-              ${taskOptions}
-            </select>
-          ` : ''}
-          ${locked ? `<p style="font-size:11px; color:#888; margin-top:0.25rem;">Sesión en curso: los selectores se bloquean. Usá Reset para cambiarlos.</p>` : ''}
-        </div>
+      <div class="card" style="display:flex; flex-direction:column; min-height: 480px; padding-bottom: 1.5rem;">
         
-        <!-- Contenedor centrado para el reloj y los botones de abajo -->
+        <div style="margin-bottom:0.5rem;">
+          <label>Tipo de Sesión</label>
+          <select onchange="onTimerTypeChange(this.value)" ${locked ? 'disabled' : ''} style="margin-bottom:0.5rem;">
+            <option value="project" ${!isStudy ? 'selected' : ''}>Proyecto / Tarea</option>
+            <option value="plan" ${isStudy ? 'selected' : ''}>Plan de Estudio</option>
+          </select>
+
+          ${!isStudy ? `
+            <!-- Selectores de Proyecto -->
+            <label>Proyecto</label>
+            <select onchange="onTimerProjectChange(this.value)" ${locked ? 'disabled' : ''}>
+              <option value="">Sin proyecto</option>
+              ${projectOptions}
+            </select>
+            ${ctx.projectId ? `
+              <label>Tarea</label>
+              <select onchange="onTimerTaskChange(this.value)" ${locked ? 'disabled' : ''}>
+                <option value="">Sin tarea</option>
+                ${taskOptions}
+              </select>
+            ` : ''}
+          ` : `
+            <!-- Selectores de Plan de Estudio -->
+            <label>Plan</label>
+            <select onchange="onTimerPlanChange(this.value)" ${locked ? 'disabled' : ''}>
+              <option value="">Sin plan</option>
+              ${planOptions}
+            </select>
+            ${ctx.planId ? `
+              <label>Materia</label>
+              <select onchange="onTimerSubjectChange(this.value)" ${locked ? 'disabled' : ''}>
+                <option value="">Sin materia</option>
+                ${subjectOptions}
+              </select>
+            ` : ''}
+            ${ctx.subjectId ? `
+              <label>Tema</label>
+              <select onchange="onTimerTopicChange(this.value)" ${locked ? 'disabled' : ''}>
+                <option value="">Sin tema</option>
+                ${topicOptions}
+              </select>
+            ` : ''}
+          `}
+          
+          <!-- Indicador visual de sesión -->
+          ${sessionLabel ? `<div style="font-size:12px; margin-top:0.75rem; padding:0.5rem; background:var(--surface-2); border-radius:var(--radius-sm); border-left: 3px solid var(--border);">${sessionLabel}</div>` : ''}
+          
+          ${locked ? `<p style="font-size:11px; color:#888; margin-top:0.5rem;">Sesión en curso: los selectores se bloquean. Usá Reset para cambiarlos.</p>` : ''}
+        </div>
         <div style="flex:1; display:flex; flex-direction:column; justify-content:center;">
           ${timerWidgetHTML(true)}
           
@@ -1188,12 +1326,23 @@ async function deleteTask(id) {
 function startTaskSession(taskId) {
   const t = state.tasks.find(x => x.id === taskId);
   if (!t) return;
-  state.settings.timerContext = { projectId: t.projectId || '', taskId: t.id };
+  state.settings.timerContext = { type: 'project', projectId: t.projectId || '', taskId: t.id, planId: '', subjectId: '', topicId: '' };
   saveSettings();
   if (!timer.running && !timer.currentSession) {
-    timer.mode = 'pomodoro';
-    timer.onBreak = false;
-    timer.remaining = state.settings.workDuration * 60;
+    timer.mode = 'pomodoro'; timer.onBreak = false; timer.remaining = state.settings.workDuration * 60;
+    startTimer();
+  }
+  state.view = 'pomodoro'; state.viewParam = null;
+  render();
+}
+
+function startTopicSession(planId, subjId, topicId) {
+  const p = state.plans.find(x => x.id === planId);
+  if (!p) return;
+  state.settings.timerContext = { type: 'plan', projectId: '', taskId: '', planId: planId, subjectId: subjId, topicId: topicId };
+  saveSettings();
+  if (!timer.running && !timer.currentSession) {
+    timer.mode = 'pomodoro'; timer.onBreak = false; timer.remaining = state.settings.workDuration * 60;
     startTimer();
   }
   state.view = 'pomodoro'; state.viewParam = null;
@@ -1201,7 +1350,7 @@ function startTaskSession(taskId) {
 }
 
 /* =============================================================
-   SECCIÓN 13 · ACCIONES DE NOTAS
+    SECCIÓN 13 · ACCIONES DE NOTAS
 ============================================================= */
 function newNote(projectId = null) {
   editNoteForm({ id: uid(), title: '', content: '', projectId: projectId || null, tags: [], image: '', isNew: true });
@@ -1472,13 +1621,20 @@ async function submitPlan(e, id) {
     return {
       id: existingSub ? existingSub.id : uid(),
       name,
-      exams: existingSub ? (existingSub.exams || []) : [], // <-- NUEVA LÍNEA PARA CONSERVAR EXÁMENES
+      exams: existingSub ? (existingSub.exams || []) : [], // Conserva exámenes
       topics: topicNames.map(tn => {
         const et = existingSub && (existingSub.topics || []).find(t => t.name === tn);
-        return { id: et ? et.id : uid(), name: tn, done: et ? et.done : false };
-      })
-    };
-  }).filter(s => s.name);
+        return { 
+          id: et ? et.id : uid(), 
+          name: tn, 
+          done: et ? et.done : false,
+          content: et ? (et.content || '') : '',     // Conserva apuntes
+          links: et ? (et.links || []) : [],         // Conserva links
+          studyTime: et ? (et.studyTime || 0) : 0    // Conserva tiempo
+        };
+      }) // Cerramos el map de temas
+    }; // Cerramos el objeto de la materia
+  }).filter(s => s.name); // Cerramos el map de materias y filtramos
   
   const plan = {
     id,
@@ -1489,6 +1645,7 @@ async function submitPlan(e, id) {
     subjects,
     createdAt: existing ? existing.createdAt : new Date().toISOString()
   };
+  
   await savePlan(plan);
   closeModal();
   render();
@@ -1501,6 +1658,7 @@ async function deletePlan(id) {
   closeModal();
   render();
 }
+
 async function toggleTopic(planId, subjId, topicId) {
   const p = state.plans.find(x => x.id === planId);
   if (!p) return;
@@ -1514,7 +1672,7 @@ async function toggleTopic(planId, subjId, topicId) {
 }
 
 /* =============================================================
-   SECCIÓN 17 · BÚSQUEDA GLOBAL
+    SECCIÓN 17 · BÚSQUEDA GLOBAL
 ============================================================= */
 document.getElementById('search-main').addEventListener('input', e => {
   searchQuery = e.target.value;
@@ -1529,7 +1687,7 @@ document.getElementById('search-main').addEventListener('input', e => {
 });
 
 /* =============================================================
-   SECCIÓN 18 · POMODORO / TIMER
+    SECCIÓN 18 · POMODORO / TIMER
 ============================================================= */
 const timer = {
   mode: 'pomodoro',
@@ -1613,23 +1771,50 @@ function startTimer() {
   if (timer.running) return;
   if (!timer.currentSession) {
     const ctx = state.settings.timerContext || {};
-    if (!ctx.projectId && !ctx.taskId) {
+    const isStudy = ctx.type === 'plan';
+    
+    // Si no hay nada seleccionado, avisamos
+    if (isStudy && !ctx.planId && !ctx.topicId) {
+      if (!confirm('No asignaste esta sesión a ningún plan ni tema. ¿Iniciar igual?')) return;
+    } else if (!isStudy && !ctx.projectId && !ctx.taskId) {
       if (!confirm('No asignaste esta sesión a ningún proyecto ni tarea. ¿Iniciar igual?')) return;
     }
-    const proj = ctx.projectId ? state.projects.find(p => p.id === ctx.projectId) : null;
-    const task = ctx.taskId ? state.tasks.find(t => t.id === ctx.taskId) : null;
+    
+    let projName = null, taskTitle = null;
+    
+    if (isStudy) {
+      const plan = state.plans.find(p => p.id === ctx.planId);
+      const sub = plan ? (plan.subjects || []).find(s => s.id === ctx.subjectId) : null;
+      const top = sub ? (sub.topics || []).find(t => t.id === ctx.topicId) : null;
+      
+      projName = plan ? plan.name : null;
+      if (sub && top) taskTitle = `${sub.name} - ${top.name}`;
+      else if (sub) taskTitle = sub.name;
+    } else {
+      const proj = ctx.projectId ? state.projects.find(p => p.id === ctx.projectId) : null;
+      const task = ctx.taskId ? state.tasks.find(t => t.id === ctx.taskId) : null;
+      projName = proj ? proj.name : null;
+      taskTitle = task ? task.title : null;
+    }
+
     timer.currentSession = {
       type: timer.mode === 'stopwatch' ? 'stopwatch' : (timer.onBreak ? 'break' : 'pomodoro'),
-      projectId: ctx.projectId || null,
-      projectName: proj ? proj.name : null,
-      taskId: ctx.taskId || null,
-      taskTitle: task ? task.title : null,
+      // Campos mapeados para el historial
+      projectId: isStudy ? ctx.planId : (ctx.projectId || null),
+      projectName: projName,
+      taskId: isStudy ? ctx.topicId : (ctx.taskId || null),
+      taskTitle: taskTitle,
+      
+      // Mantenemos la referencia de estudio para sumar tiempo
+      planId: isStudy ? ctx.planId : null,
+      topicId: isStudy ? ctx.topicId : null,
+      
       startedAt: new Date().toISOString()
     };
   }
   timer.running = true;
   timer.intervalId = setInterval(tickTimer, 1000);
-  saveTimerState(); // Guardamos
+  saveTimerState();
   updateTimerDisplays();
 }
 
@@ -1687,7 +1872,6 @@ async function finalizeSession() {
   if (!timer.currentSession) return;
   const cs = timer.currentSession;
   
-  // Calculamos el tiempo REAL transcurrido
   let duration = 0;
   if (cs.type === 'stopwatch') {
     duration = timer.elapsed;
@@ -1699,6 +1883,23 @@ async function finalizeSession() {
 
   if (duration <= 0) { timer.currentSession = null; return; }
   
+  // 1. SUMAMOS EL TIEMPO AL TEMA (Si es una sesión de estudio)
+  if (cs.planId && cs.topicId) {
+    const p = state.plans.find(x => x.id === cs.planId);
+    if (p) {
+      // Buscamos el tema en todas las materias
+      for (const sub of p.subjects) {
+        const topic = sub.topics.find(t => t.id === cs.topicId);
+        if (topic) {
+          topic.studyTime = (topic.studyTime || 0) + duration;
+          await savePlan(p); // Guardamos el plan actualizado
+          break;
+        }
+      }
+    }
+  }
+
+  // 2. GUARDAMOS LA SESIÓN EN EL HISTORIAL
   const session = {
     id: uid(),
     type: cs.type,
@@ -1713,6 +1914,7 @@ async function finalizeSession() {
   
   await DB.put('sessions', session);
   state.sessions.push(session);
+  
   timer.currentSession = null;
   localStorage.removeItem('pcb_timer_state');
 }
@@ -1793,8 +1995,41 @@ function notify(msg) {
 }
 
 function onTimerProjectChange(value) {
-  state.settings.timerContext.projectId = value || '';
-  state.settings.timerContext.taskId = '';
+  state.settings.timerContext = { 
+    projectId: value || '', 
+    taskId: '',
+    planId: '',
+    topicId: ''
+  };
+  saveSettings();
+  render();
+}
+
+function onTimerTypeChange(value) {
+  state.settings.timerContext = { 
+    type: value, projectId: '', taskId: '', planId: '', subjectId: '', topicId: '' 
+  };
+  saveSettings();
+  render();
+}
+
+function onTimerPlanChange(value) {
+  state.settings.timerContext.planId = value || '';
+  state.settings.timerContext.subjectId = '';
+  state.settings.timerContext.topicId = '';
+  saveSettings();
+  render();
+}
+
+function onTimerSubjectChange(value) {
+  state.settings.timerContext.subjectId = value || '';
+  state.settings.timerContext.topicId = '';
+  saveSettings();
+  render();
+}
+
+function onTimerTopicChange(value) {
+  state.settings.timerContext.topicId = value || '';
   saveSettings();
   render();
 }
