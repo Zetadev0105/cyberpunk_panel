@@ -48,6 +48,8 @@ const state = {
   },
   timeFilters: { range: 'today', projectId: '', taskId: '' }
 };
+
+let tempTimerCtx = null; // Variable temporal para el modal de destino
 let searchQuery = '';
 
 /* =============================================================
@@ -849,95 +851,39 @@ async function deleteExam(planId, subjectId, examId) {
 }
 
 function viewPomodoro() {
-  // Aseguramos que el contexto tenga la propiedad 'type'
-  const ctx = state.settings.timerContext || { type: 'project', projectId: '', taskId: '', planId: '', subjectId: '', topicId: '' };
-  if (!ctx.type) ctx.type = 'project'; // Retrocompatibilidad
-  
+  const ctx = state.settings.timerContext || { type: 'project' };
   const isStudy = ctx.type === 'plan';
-  
-  // Variables para los selects de Proyecto
-  const projectOptions = state.projects.map(p => `<option value="${p.id}" ${p.id === ctx.projectId ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('');
-  const tasksInProject = ctx.projectId ? state.tasks.filter(t => t.projectId === ctx.projectId && t.status !== 'done') : [];
-  const taskOptions = tasksInProject.map(t => `<option value="${t.id}" ${t.id === ctx.taskId ? 'selected' : ''}>${escapeHtml(t.title)}</option>`).join('');
-  
-  // Variables para los selects de Plan
-  const planOptions = state.plans.map(p => `<option value="${p.id}" ${p.id === ctx.planId ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('');
-  const selectedPlan = state.plans.find(p => p.id === ctx.planId);
-  const subjectsInPlan = selectedPlan ? (selectedPlan.subjects || []) : [];
-  const subjectOptions = subjectsInPlan.map(s => `<option value="${s.id}" ${s.id === ctx.subjectId ? 'selected' : ''}>${escapeHtml(s.name)}</option>`).join('');
-  const selectedSubject = subjectsInPlan.find(s => s.id === ctx.subjectId);
-  const topicsInSubject = selectedSubject ? (selectedSubject.topics || []) : [];
-  const topicOptions = topicsInSubject.map(t => `<option value="${t.id}" ${t.id === ctx.topicId ? 'selected' : ''}>${escapeHtml(t.name)}</option>`).join('');
-
   const locked = !!timer.currentSession;
 
   // Generamos el texto indicador de la sesión actual
   let sessionLabel = '';
-  if (isStudy) {
+  if (isStudy && ctx.planId) {
     const plan = state.plans.find(p => p.id === ctx.planId);
     const sub = plan ? (plan.subjects || []).find(s => s.id === ctx.subjectId) : null;
     const top = sub ? (sub.topics || []).find(t => t.id === ctx.topicId) : null;
-    if (plan) sessionLabel = `<span style="color:var(--info); font-weight:bold;">📚 Estudiando:</span> ${escapeHtml(plan.name)} ${sub ? '> ' + escapeHtml(sub.name) : ''} ${top ? '> ' + escapeHtml(top.name) : ''}`;
-  } else {
+    if (plan) sessionLabel = `<span style="color:var(--info); font-weight:bold;">📚 Estudiando:</span><br>${escapeHtml(plan.name)} ${sub ? '> ' + escapeHtml(sub.name) : ''} ${top ? '> ' + escapeHtml(top.name) : ''}`;
+  } else if (!isStudy && (ctx.projectId || ctx.taskId)) {
     const proj = state.projects.find(p => p.id === ctx.projectId);
     const task = state.tasks.find(t => t.id === ctx.taskId);
-    if (proj || task) sessionLabel = `<span style="color:var(--accent); font-weight:bold;">💼 Trabajando:</span> ${proj ? escapeHtml(proj.name) : ''} ${task ? '> ' + escapeHtml(task.title) : ''}`;
+    sessionLabel = `<span style="color:var(--accent); font-weight:bold;">💼 Trabajando:</span><br>${proj ? escapeHtml(proj.name) : ''} ${task ? '> ' + escapeHtml(task.title) : ''}`;
+  } else {
+    sessionLabel = `<span style="color:var(--text-muted); font-size:12px;">No seleccionaste ningún destino para esta sesión.</span>`;
   }
 
   return `
     <h2>Pomodoro</h2>
     <div class="grid-auto" style="grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));">
-      <div class="card" style="display:flex; flex-direction:column; min-height: 480px; padding-bottom: 1.5rem;">
+      <div class="card" style="display:flex; flex-direction:column; min-height: 380px; padding-bottom: 1.5rem;">
         
-        <div style="margin-bottom:0.5rem;">
-          <label>Tipo de Sesión</label>
-          <select onchange="onTimerTypeChange(this.value)" ${locked ? 'disabled' : ''} style="margin-bottom:0.5rem;">
-            <option value="project" ${!isStudy ? 'selected' : ''}>Proyecto / Tarea</option>
-            <option value="plan" ${isStudy ? 'selected' : ''}>Plan de Estudio</option>
-          </select>
-
-          ${!isStudy ? `
-            <!-- Selectores de Proyecto -->
-            <label>Proyecto</label>
-            <select onchange="onTimerProjectChange(this.value)" ${locked ? 'disabled' : ''}>
-              <option value="">Sin proyecto</option>
-              ${projectOptions}
-            </select>
-            ${ctx.projectId ? `
-              <label>Tarea</label>
-              <select onchange="onTimerTaskChange(this.value)" ${locked ? 'disabled' : ''}>
-                <option value="">Sin tarea</option>
-                ${taskOptions}
-              </select>
-            ` : ''}
-          ` : `
-            <!-- Selectores de Plan de Estudio -->
-            <label>Plan</label>
-            <select onchange="onTimerPlanChange(this.value)" ${locked ? 'disabled' : ''}>
-              <option value="">Sin plan</option>
-              ${planOptions}
-            </select>
-            ${ctx.planId ? `
-              <label>Materia</label>
-              <select onchange="onTimerSubjectChange(this.value)" ${locked ? 'disabled' : ''}>
-                <option value="">Sin materia</option>
-                ${subjectOptions}
-              </select>
-            ` : ''}
-            ${ctx.subjectId ? `
-              <label>Tema</label>
-              <select onchange="onTimerTopicChange(this.value)" ${locked ? 'disabled' : ''}>
-                <option value="">Sin tema</option>
-                ${topicOptions}
-              </select>
-            ` : ''}
-          `}
-          
-          <!-- Indicador visual de sesión -->
-          ${sessionLabel ? `<div style="font-size:12px; margin-top:0.75rem; padding:0.5rem; background:var(--surface-2); border-radius:var(--radius-sm); border-left: 3px solid var(--border);">${sessionLabel}</div>` : ''}
-          
-          ${locked ? `<p style="font-size:11px; color:#888; margin-top:0.5rem;">Sesión en curso: los selectores se bloquean. Usá Reset para cambiarlos.</p>` : ''}
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:1rem; gap:0.5rem;">
+          <div style="flex:1; padding:0.5rem; background:var(--surface-2); border-radius:var(--radius-sm); border-left: 3px solid var(--border); min-height: 50px; display:flex; flex-direction:column; justify-content:center;">
+            ${sessionLabel}
+          </div>
+          <button class="primary" onclick="openTimerTargetModal()" ${locked ? 'disabled' : ''} style="padding: 0.5rem 1rem;">
+            Destino
+          </button>
         </div>
+        
         <div style="flex:1; display:flex; flex-direction:column; justify-content:center;">
           ${timerWidgetHTML(true)}
           
@@ -959,6 +905,118 @@ function viewPomodoro() {
       </div>
     </div>
   `;
+}
+
+function openTimerTargetModal() {
+  // Copiamos el contexto actual para trabajar sobre él
+  const ctx = state.settings.timerContext || { type: 'project', projectId: '', taskId: '', planId: '', subjectId: '', topicId: '' };
+  tempTimerCtx = { type: ctx.type || 'project', projectId: ctx.projectId || '', taskId: ctx.taskId || '', planId: ctx.planId || '', subjectId: ctx.subjectId || '', topicId: ctx.topicId || '' };
+
+  openModal(`
+    <h3>Seleccionar Destino</h3>
+    <form onsubmit="saveTimerTarget(event)">
+      <label>Tipo de Sesión</label>
+      <select id="modal-timer-type" onchange="updateTimerModalFields()">
+        <option value="project" ${tempTimerCtx.type === 'project' ? 'selected' : ''}>Proyecto / Tarea</option>
+        <option value="plan" ${tempTimerCtx.type === 'plan' ? 'selected' : ''}>Plan de Estudio</option>
+      </select>
+
+      <div id="modal-timer-fields"></div>
+
+      <div style="margin-top:1rem; display:flex; gap:0.5rem; justify-content:flex-end;">
+        <button type="button" class="btn-ghost" onclick="closeModal()">Cancelar</button>
+        <button type="submit" class="primary">Confirmar Destino</button>
+      </div>
+    </form>
+  `);
+  
+  updateTimerModalFields();
+}
+
+function updateTimerModalFields() {
+  const type = document.getElementById('modal-timer-type').value;
+  tempTimerCtx.type = type;
+
+  // Leemos los valores actuales del DOM antes de redibujar
+  if (type === 'project') {
+    const pSel = document.getElementById('modal-project');
+    if (pSel) tempTimerCtx.projectId = pSel.value;
+    const tSel = document.getElementById('modal-task');
+    if (tSel) tempTimerCtx.taskId = tSel.value;
+  } else {
+    const plSel = document.getElementById('modal-plan');
+    if (plSel) tempTimerCtx.planId = plSel.value;
+    const suSel = document.getElementById('modal-subject');
+    if (suSel) tempTimerCtx.subjectId = suSel.value;
+    const toSel = document.getElementById('modal-topic');
+    if (toSel) tempTimerCtx.topicId = toSel.value;
+  }
+
+  const container = document.getElementById('modal-timer-fields');
+  let html = '';
+
+  if (type === 'project') {
+    const projectOptions = state.projects.map(p => `<option value="${p.id}" ${p.id === tempTimerCtx.projectId ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('');
+    html += `
+      <label>Proyecto</label>
+      <select id="modal-project" onchange="updateTimerModalFields()">
+        <option value="">Sin proyecto</option>
+        ${projectOptions}
+      </select>
+    `;
+    if (tempTimerCtx.projectId) {
+      const tasksInProject = state.tasks.filter(t => t.projectId === tempTimerCtx.projectId && t.status !== 'done');
+      const taskOptions = tasksInProject.map(t => `<option value="${t.id}" ${t.id === tempTimerCtx.taskId ? 'selected' : ''}>${escapeHtml(t.title)}</option>`).join('');
+      html += `
+        <label>Tarea</label>
+        <select id="modal-task" onchange="updateTimerModalFields()">
+          <option value="">Sin tarea</option>
+          ${taskOptions}
+        </select>
+      `;
+    }
+  } else {
+    const planOptions = state.plans.map(p => `<option value="${p.id}" ${p.id === tempTimerCtx.planId ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('');
+    html += `
+      <label>Plan</label>
+      <select id="modal-plan" onchange="updateTimerModalFields()">
+        <option value="">Sin plan</option>
+        ${planOptions}
+      </select>
+    `;
+    if (tempTimerCtx.planId) {
+      const plan = state.plans.find(p => p.id === tempTimerCtx.planId);
+      const subOptions = (plan.subjects || []).map(s => `<option value="${s.id}" ${s.id === tempTimerCtx.subjectId ? 'selected' : ''}>${escapeHtml(s.name)}</option>`).join('');
+      html += `
+        <label>Materia / Sección</label>
+        <select id="modal-subject" onchange="updateTimerModalFields()">
+          <option value="">Sin materia</option>
+          ${subOptions}
+        </select>
+      `;
+      if (tempTimerCtx.subjectId) {
+        const sub = plan.subjects.find(s => s.id === tempTimerCtx.subjectId);
+        const topOptions = (sub.topics || []).map(t => `<option value="${t.id}" ${t.id === tempTimerCtx.topicId ? 'selected' : ''}>${escapeHtml(t.name)}</option>`).join('');
+        html += `
+          <label>Tema</label>
+          <select id="modal-topic" onchange="updateTimerModalFields()">
+            <option value="">Sin tema</option>
+            ${topOptions}
+          </select>
+        `;
+      }
+    }
+  }
+
+  container.innerHTML = html;
+}
+
+function saveTimerTarget(e) {
+  e.preventDefault();
+  state.settings.timerContext = tempTimerCtx;
+  saveSettings();
+  closeModal();
+  render();
 }
 
 function viewTimeUsage() {
@@ -1994,52 +2052,6 @@ function notify(msg) {
   console.log(msg);
 }
 
-function onTimerProjectChange(value) {
-  state.settings.timerContext = { 
-    projectId: value || '', 
-    taskId: '',
-    planId: '',
-    topicId: ''
-  };
-  saveSettings();
-  render();
-}
-
-function onTimerTypeChange(value) {
-  state.settings.timerContext = { 
-    type: value, projectId: '', taskId: '', planId: '', subjectId: '', topicId: '' 
-  };
-  saveSettings();
-  render();
-}
-
-function onTimerPlanChange(value) {
-  state.settings.timerContext.planId = value || '';
-  state.settings.timerContext.subjectId = '';
-  state.settings.timerContext.topicId = '';
-  saveSettings();
-  render();
-}
-
-function onTimerSubjectChange(value) {
-  state.settings.timerContext.subjectId = value || '';
-  state.settings.timerContext.topicId = '';
-  saveSettings();
-  render();
-}
-
-function onTimerTopicChange(value) {
-  state.settings.timerContext.topicId = value || '';
-  saveSettings();
-  render();
-}
-
-function onTimerTaskChange(value) {
-  state.settings.timerContext.taskId = value || '';
-  saveSettings();
-  render();
-}
-
 async function changeWorkDuration(v) {
   const n = parseInt(v, 10);
   if (!n || n < 1) return;
@@ -2059,7 +2071,7 @@ async function changeBreakDuration(v) {
 }
 
 /* =============================================================
-   SECCIÓN 19 · USO DEL TIEMPO · FILTROS Y ACCIONES
+    SECCIÓN 19 · USO DEL TIEMPO · FILTROS Y ACCIONES
 ============================================================= */
 function setTimeFilter(key, value) {
   state.timeFilters[key] = value;
