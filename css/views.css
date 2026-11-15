@@ -1,0 +1,198 @@
+/* =============================================================
+   views.css — Layouts específicos de cada vista
+============================================================= */
+
+/* --- Grids de tarjetas --- */
+.grid-auto {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: var(--gap-grid);
+}
+.grid-links {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: var(--gap-grid);
+}
+.panel-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: var(--gap-grid);
+}
+
+/* Acá solo dejamos la estructura de la card, las esquinas 
+   ahora vienen heredadas desde components.css */
+.panel-grid > .card {
+  aspect-ratio: 1 / 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 200px;
+}
+.panel-grid > .card .card-body {
+  flex: 1;
+  overflow-y: auto;
+}
+
+/* --- Notas tipo Keep --- */
+.notes-grid {
+  column-count: 4;
+  column-gap: 1rem;
+}
+@media (max-width: 1200px) { .notes-grid { column-count: 3; } }
+@media (max-width: 900px)  { .notes-grid { column-count: 2; } }
+@media (max-width: 600px)  { .notes-grid { column-count: 1; } }
+
+.note-card {
+  break-inside: avoid;
+  display: block;
+  margin-bottom: 1rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  padding: 0.75rem;
+  cursor: pointer;
+  transition: box-shadow 0.15s, border-color 0.15s;
+  min-height: 80px;
+}
+.note-card:hover {
+  box-shadow: var(--shadow-sm);
+  border-color: var(--border-strong);
+}
+.note-card .note-title {
+  font-weight: var(--fw-semibold);
+  font-size: var(--fs-md);
+  margin-bottom: 0.4rem;
+}
+.note-card .note-image {
+  width: 100%;
+  border-radius: var(--radius-md);
+  margin-bottom: 0.5rem;
+  max-height: 180px;
+  object-fit: cover;
+  display: block;
+}
+.note-card .note-preview {
+  font-size: var(--fs-sm2);
+  color: var(--text-soft);
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.note-card .note-footer {
+  margin-top: 0.5rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+.note-card.new-note {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-faint);
+  font-size: var(--fs-base);
+  min-height: 100px;
+  border-style: dashed;
+}
+
+/* --- Markdown preview (editor de notas) --- */
+.md-preview {
+  border: 1px solid var(--border);
+  padding: 0.6rem;
+  border-radius: var(--radius-md);
+  min-height: 200px;
+  overflow: auto;
+  font-size: var(--fs-base);
+}
+.md-preview h2 { font-size: 1.1rem; margin: 0.5rem 0 0.3rem; }
+.md-preview h3 { font-size: 1rem;    margin: 0.5rem 0 0.3rem; }
+.md-preview h4 { font-size: 0.95rem; margin: 0.4rem 0 0.2rem; }
+.md-preview code {
+  background: var(--surface-2);
+  padding: 1px 4px;
+  border-radius: var(--radius-sm);
+}
+.md-preview a { color: var(--info); }
+
+/* --- Uso del tiempo --- */
+.usage-bar-bg {
+  flex: 1;
+  background: var(--surface-2);
+  height: 8px;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+.usage-bar-fill {
+  height: 100%;
+  background: var(--info);
+}
+.usage-summary-row {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-header);
+  font-size: var(--fs-sm2);
+  margin-bottom: 0.35rem;
+}
+.usage-summary-row .name {
+  min-width: 130px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.usage-summary-row .val {
+  min-width: 70px;
+  text-align: right;
+  color: var(--text-muted);
+}
+
+.timer-display {
+  font-family: var(--font-display);
+  font-size: var(--fs-2xl);
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--fw-bold);
+  letter-spacing: var(--letter-spacing-display);
+}
+
+.timer-display.big {
+  font-size: var(--fs-3xl);
+  text-shadow: 0 0 20px rgba(252, 238, 10, 0.3);
+}
+
+/* --- Barra de progreso del Timer (Cyberpunk) --- */
+.timer-progress-container {
+  width: 80%;
+  max-width: 250px;
+  height: 4px;
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+  margin-top: 0.75rem;
+  overflow: hidden;
+  position: relative;
+  box-shadow: inset 0 0 5px rgba(0,0,0,0.8);
+}
+.timer-progress-bar {
+  height: 100%;
+  width: 0%;
+  background: var(--accent);
+  transition: width 1s linear, background 0.3s, box-shadow 0.3s;
+  box-shadow: 0 0 10px var(--accent);
+}
+
+/* --- Tarjeta de Sesión Activa (Uso del tiempo) --- */
+.card.active-session {
+  border-color: rgba(0, 255, 159, 0.4);
+  background: linear-gradient(135deg, var(--surface) 0%, rgba(0, 255, 159, 0.05) 100%);
+}
+.card.active-session::before,
+.card.active-session::after {
+  border-color: var(--success);
+}
+.card.active-session:hover::before,
+.card.active-session:hover::after {
+  filter: drop-shadow(0 0 5px var(--success));
+}
+
+/* --- Responsive específico de vistas --- */
+@media (max-width: 760px) {
+  .panel-grid {
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  }
+}

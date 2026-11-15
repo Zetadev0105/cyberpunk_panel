@@ -1,0 +1,464 @@
+/* =============================================================
+   components.css — Componentes reutilizables
+============================================================= */
+
+/* --- Botones --- */
+button {
+  padding: 0.35rem 0.7rem;
+  cursor: pointer;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  border-radius: var(--radius-md);
+  font-size: var(--fs-base);
+  font-family: inherit;
+  color: var(--text);
+  letter-spacing: 0.02em;
+  transition: all 0.15s;
+}
+button:hover { background: var(--surface-hover); }
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Botón Principal (Amarillo con corte Cyberpunk) */
+button.primary {
+  background: var(--accent-strong);
+  color: var(--text-inverse);
+  border: none;
+  font-weight: var(--fw-semibold);
+  letter-spacing: 0.03em;
+  padding-right: 1.2rem; /* Aire extra por el corte */
+  /* El corte en la esquina superior derecha */
+  clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 0 100%);
+}
+button.primary:hover {
+  background: var(--accent-hover);
+  filter: drop-shadow(0 0 8px var(--accent));
+}
+
+/* Botón de Peligro (Eliminar) */
+button.btn-danger {
+  background: transparent;
+  color: var(--danger);
+  border-color: var(--danger);
+}
+button.btn-danger:hover {
+  background: rgba(255, 0, 60, 0.1);
+  box-shadow: var(--glow-magenta);
+}
+
+/* Botón Fantasma (Cancelar) */
+button.btn-ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--text-muted);
+}
+button.btn-ghost:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+button.primary:hover {
+  background: var(--accent-hover);
+  box-shadow: var(--glow-yellow);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* --- Inputs --- */
+input, textarea, select {
+  width: 100%;
+  padding: 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  font-family: inherit;
+  font-size: var(--fs-base);
+  margin-bottom: 0.5rem;
+  color: var(--text);
+  background: var(--surface-input);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+textarea { min-height: 70px; resize: vertical; }
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-ghost);
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(252, 238, 10, 0.25);
+}
+
+/* --- Modal --- */
+#modal {
+  position: fixed;
+  inset: 0;
+  background: var(--overlay);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 2rem 1rem;
+  overflow-y: auto;
+  z-index: 100;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+#modal .content {
+  background: var(--surface);
+  padding: var(--pad-inline);
+  border-radius: var(--radius-lg);
+  max-width: 640px;
+  width: 100%;
+  box-shadow: var(--shadow-md);
+  border: 1px solid var(--border-strong); /* Borde corregido: va acá, no en el fondo */
+}
+
+/* --- Card --- */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: var(--pad-card);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  position: relative;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.card:hover {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Esquinas Cyberpunk para TODAS las cards */
+.card::before,
+.card::after {
+  content: '';
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  pointer-events: none;
+  transition: filter 0.2s;
+  z-index: 10;
+}
+
+.card::before {
+  top: 0;
+  left: 0;
+  border-top: 2px solid var(--accent);
+  border-left: 2px solid var(--accent);
+}
+
+.card::after {
+  bottom: 0;
+  right: 0;
+  border-bottom: 2px solid var(--accent);
+  border-right: 2px solid var(--accent);
+}
+
+.card:hover::before,
+.card:hover::after {
+  filter: drop-shadow(0 0 5px var(--accent));
+}
+
+/* --- Section header --- */
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--pad-block);
+  gap: var(--gap-header);
+}
+
+/* --- Link cards (accesos rápidos) --- */
+.link-card {
+  aspect-ratio: 1 / 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  padding: 0.5rem;
+  text-decoration: none;
+  color: var(--text);
+  background-color: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  overflow: hidden;
+  font-family: inherit;
+  font-size: var(--fs-base);
+  position: relative;
+  background-size: cover;
+  background-position: center;
+  /* Capa oscura sobre la imagen usando inset shadow */
+  box-shadow: inset 0 0 0 100vmax rgba(8, 8, 13, 0.65);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.link-card:hover {
+  border-color: var(--info);
+  /* Al pasar el mouse, la capa se aclara un poco y aparece un glow cian */
+  box-shadow: inset 0 0 0 100vmax rgba(8, 8, 13, 0.4), 0 0 10px rgba(0, 255, 240, 0.2);
+}
+
+/* Aseguramos que el texto y el icono queden SIEMPRE sobre la capa oscura */
+.link-card > div {
+  position: relative;
+  z-index: 2;
+}
+
+/* Estilo para el nombre del acceso directo */
+.link-title {
+  font-family: var(--font-display);
+  font-size: 1.1rem; /* Subimos el tamaño */
+  font-weight: var(--fw-bold);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8); /* Sombra para legibilidad sobre la imagen */
+  line-height: 1.2;
+}
+
+.link-card.embed { padding: 0; box-shadow: none; }
+.link-card.embed iframe {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  border-radius: var(--radius-md);
+  position: relative;
+  z-index: 2;
+}
+
+/* Esquinas cian para los accesos rápidos */
+.link-card::before,
+.link-card::after {
+  content: '';
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  pointer-events: none;
+  transition: filter 0.2s;
+  z-index: 10;
+}
+.link-card::before {
+  top: 0; left: 0;
+  border-top: 2px solid var(--info);
+  border-left: 2px solid var(--info);
+}
+.link-card::after {
+  bottom: 0; right: 0;
+  border-bottom: 2px solid var(--info);
+  border-right: 2px solid var(--info);
+}
+.link-card:hover::before,
+.link-card:hover::after {
+  filter: drop-shadow(0 0 5px var(--info));
+}
+
+/* --- Task row --- */
+.task-row {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-row);
+  padding: 0.35rem 0.4rem;
+  border-bottom: 1px solid var(--border-soft);
+  font-size: var(--fs-base);
+  transition: background 0.15s;
+}
+.task-row:last-child { border-bottom: 0; }
+.task-row:hover { background: var(--surface-hover); }
+
+.task-row.done .title { text-decoration: line-through; opacity: 0.5; }
+/* --- Checkboxes Personalizados --- */
+input[type=checkbox] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-input);
+  cursor: pointer;
+  position: relative;
+  transition: all 0.2s;
+  margin: 0;
+  flex: none;
+}
+input[type=checkbox]:hover {
+  border-color: var(--accent);
+}
+input[type=checkbox]:checked {
+  background: var(--accent);
+  border-color: var(--accent);
+  box-shadow: 0 0 8px rgba(252, 238, 10, 0.4);
+}
+/* El "tilache" (check) interior */
+input[type=checkbox]:checked::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 0px;
+  width: 4px;
+  height: 9px;
+  border: solid var(--text-inverse);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+.task-row .title {
+  flex: 1;
+  cursor: pointer;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.task-row .meta {
+  font-size: var(--fs-sm);
+  color: var(--text-faint);
+  flex: none;
+}
+
+/* --- Play (iniciar sesión con esta tarea) --- */
+.btn-play {
+  background: transparent;
+  border: 1px solid transparent;
+  padding: 1px 5px;
+  font-size: var(--fs-sm);
+  color: var(--text-soft);
+}
+.btn-play:hover {
+  background: var(--play-hover-bg);
+  border-color: var(--play-hover-border);
+  color: var(--play-hover-text);
+}
+
+/* --- Prioridades --- */
+.priority-high   { border-left: 3px solid var(--prio-high); }
+.priority-medium { border-left: 3px solid var(--prio-medium); }
+.priority-low    { border-left: 3px solid var(--prio-low); }
+
+/* --- Tag --- */
+.tag {
+  display: inline-block;
+  background: var(--surface-2);
+  color: var(--info);
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(0, 255, 240, 0.25);
+  font-size: var(--fs-sm);
+  margin-right: 3px;
+  letter-spacing: 0.02em;
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 6px 100%, 0 calc(100% - 6px));
+}
+
+/* --- Timer --- */
+.timer-mode {
+  font-size: var(--fs-sm2);
+  color: var(--text-muted);
+  margin-top: 0.25rem;
+}
+.timer-actions {
+  display: flex;
+  gap: var(--gap-row);
+  margin-top: 0.75rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+/* --- Tabs --- */
+.tabs {
+  display: flex;
+  gap: var(--gap-row);
+  margin-bottom: var(--pad-block);
+}
+.tabs button.active {
+  background: var(--accent);
+  color: var(--text-inverse);
+  border-color: var(--accent);
+}
+
+/* --- Empty state --- */
+.empty {
+  color: var(--text-faint);
+  font-size: var(--fs-sm2);
+  padding: var(--gap-header);
+}
+
+/* --- Shortcut input (Ajustes) --- */
+.shortcut-input {
+  width: 90px;
+  text-align: center;
+  text-transform: uppercase;
+  font-family: var(--font-mono);
+  font-weight: var(--fw-semibold);
+  cursor: pointer;
+  background: var(--surface-input);
+}
+.shortcut-input:focus {
+  background: var(--surface-highlight);
+}
+
+/* --- Image preview en modales --- */
+.img-preview {
+  max-width: 100%;
+  max-height: 110px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-soft);
+  display: block;
+  margin-bottom: var(--gap-header);
+}
+
+/* --- Card images --- */
+.card-image {
+  width: 100%;
+  height: 120px;
+  object-fit: cover;
+  border-radius: var(--radius-md);
+  margin-bottom: var(--gap-header);
+  display: block;
+}
+.card-image-sm {
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+  flex: none;
+}
+
+#modal .content h3 {
+  font-family: var(--font-display);
+  font-weight: var(--fw-bold);
+  letter-spacing: var(--letter-spacing-wide);
+  text-transform: uppercase;
+  padding-left: 1.5rem;
+  position: relative;
+  margin-bottom: 0.75rem;
+  color: var(--text);
+}
+
+#modal .content h3::before {
+  content: '//';
+  position: absolute;
+  left: 0;
+  color: var(--accent);
+  font-weight: var(--fw-bold);
+}
+
+#modal .content h3::after {
+  content: '';
+  display: block;
+  height: 1px;
+  margin-top: 0.35rem;
+  background: linear-gradient(90deg, var(--accent) 0%, transparent 100%);
+  opacity: 0.7;
+}
+
+button:active {
+  transform: scale(0.96);
+}

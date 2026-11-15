@@ -1,0 +1,11 @@
+# Archivos del sistema operativo
+.DS_Store
+Thumbs.db
+
+# Archivos de VS Code
+.vscode/
+*.code-workspace
+
+# Backups locales (por si guardás JSONs acá)
+*.json
+!manifest.json
