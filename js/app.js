@@ -390,7 +390,9 @@ function linkCard(l) {
 
 function timerWidgetHTML(big) {
   const cls = big ? 'timer-display big' : 'timer-display';
-  return `<div style="flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center;">
+  const flexStyle = big ? '' : 'flex:1;'; // Solo se estira en el panel principal
+  
+  return `<div style="${flexStyle} display:flex; flex-direction:column; align-items:center; justify-content:center;">
     <div class="${cls}" data-timer-display>25:00</div>
     <div class="timer-mode" data-timer-mode>Pomodoro</div>
     
@@ -641,10 +643,11 @@ function viewPomodoro() {
   const tasksInProject = ctx.projectId ? state.tasks.filter(t => t.projectId === ctx.projectId && t.status !== 'done') : [];
   const taskOptions = tasksInProject.map(t => `<option value="${t.id}" ${t.id === ctx.taskId ? 'selected' : ''}>${escapeHtml(t.title)}</option>`).join('');
   const locked = !!timer.currentSession;
+  
   return `
     <h2>Pomodoro</h2>
     <div class="grid-auto" style="grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));">
-      <div class="card" style="aspect-ratio:1/1; display:flex; flex-direction:column;">
+      <div class="card" style="display:flex; flex-direction:column; min-height: 420px; padding-bottom: 1.5rem;">
         <div style="margin-bottom:0.5rem;">
           <label>Proyecto</label>
           <select id="timer-project-select" onchange="onTimerProjectChange(this.value)" ${locked ? 'disabled' : ''}>
@@ -660,15 +663,19 @@ function viewPomodoro() {
           ` : ''}
           ${locked ? `<p style="font-size:11px; color:#888; margin-top:0.25rem;">Sesión en curso: los selectores se bloquean. Usá Reset para cambiarlos.</p>` : ''}
         </div>
-        ${timerWidgetHTML(true)}
         
-        <div style="display:flex; gap:0.4rem; justify-content:center; margin-top:0.75rem; margin-bottom: 1.5rem; flex-wrap:wrap;">
-          <button onclick="setTimerMode('pomodoro')">Pomodoro</button>
-          <button onclick="setTimerMode('stopwatch')">Cronómetro</button>
-          ${timer.mode === 'stopwatch' && timer.currentSession ? `<button onclick="saveAndStopStopwatch()" class="primary">Guardar sesión</button>` : ''}
+        <!-- Contenedor centrado para el reloj y los botones de abajo -->
+        <div style="flex:1; display:flex; flex-direction:column; justify-content:center;">
+          ${timerWidgetHTML(true)}
+          
+          <div style="display:flex; gap:0.4rem; justify-content:center; margin-top:1rem; flex-wrap:wrap;">
+            <button onclick="setTimerMode('pomodoro')">Pomodoro</button>
+            <button onclick="setTimerMode('stopwatch')">Cronómetro</button>
+            ${timer.mode === 'stopwatch' && timer.currentSession ? `<button onclick="saveAndStopStopwatch()" class="primary">Guardar sesión</button>` : ''}
+          </div>
         </div>
-        
       </div>
+      
       <div class="card">
         <h3>Configuración</h3>
         <label>Duración trabajo (min)</label>
