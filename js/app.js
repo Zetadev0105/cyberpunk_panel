@@ -483,6 +483,15 @@ function viewToday() {
   `;
 }
 
+function viewInbox() {
+  const inbox = state.tasks.filter(t => !t.projectId && t.status !== 'archived');
+  return `
+    <h2>Inbox · ${inbox.length}</h2>
+    <p style="font-size:12px; color:#666; margin-bottom:0.75rem;">Tareas sin proyecto asignado.</p>
+    ${inbox.map(taskRow).join('') || '<div class="empty">Sin tareas en Inbox.</div>'}
+  `;
+}
+
 function viewTasks() {
   // Usamos la nueva función sortTasks
   const tasks = sortTasks(state.tasks); 
