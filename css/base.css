@@ -161,8 +161,8 @@ label {
 .sidebar-sub {
   display: block;
   font-size: 0.85em;
-  color: var(--accent);
-  opacity: 0.8;
+  color: inherit; /* <-- La magia: hereda el color del padre (negro si está activo) */
+  opacity: 0.75;  /* Un poco de transparencia para que no compita con el título principal */
   margin-top: 2px;
   white-space: nowrap;
   overflow: hidden;
