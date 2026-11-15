@@ -85,6 +85,28 @@ const upsert = (arr, obj) => { const i = arr.findIndex(x => x.id === obj.id); if
 
 function currentProjectContext() { return state.view === 'project' ? state.viewParam : null; }
 
+function sortTasks(tasks) {
+  return [...tasks].sort((a, b) => {
+    // 1. Estado (Pendientes primero, luego Hechas)
+    if (a.status !== b.status) {
+      return a.status === 'done' ? 1 : -1;
+    }
+
+    // 2. Fecha de vencimiento (Ascendente, sin fecha va al final)
+    const dateA = a.dueDate || '9999-12-31';
+    const dateB = b.dueDate || '9999-12-31';
+    if (dateA !== dateB) {
+      return dateA.localeCompare(dateB);
+    }
+
+    // 3. Prioridad (Alta: 3, Media: 2, Baja: 1)
+    const priorityMap = { high: 3, medium: 2, low: 1 };
+    const pA = priorityMap[a.priority] || 1;
+    const pB = priorityMap[b.priority] || 1;
+    return pB - pA; // Orden descendente
+  });
+}
+
 function md(text) {
   if (!text) return '';
   return text
@@ -459,17 +481,10 @@ function viewToday() {
   `;
 }
 
-function viewInbox() {
-  const inbox = state.tasks.filter(t => !t.projectId && t.status !== 'archived');
-  return `
-    <h2>Inbox · ${inbox.length}</h2>
-    <p style="font-size:12px; color:#666; margin-bottom:0.75rem;">Tareas sin proyecto asignado.</p>
-    ${inbox.map(taskRow).join('') || '<div class="empty">Sin tareas en Inbox.</div>'}
-  `;
-}
-
 function viewTasks() {
-  const tasks = [...state.tasks].sort((a, b) => (a.status === 'done') - (b.status === 'done') || (a.dueDate || '9999').localeCompare(b.dueDate || '9999'));
+  // Usamos la nueva función sortTasks
+  const tasks = sortTasks(state.tasks); 
+  
   return `
     <h2>Tareas · ${tasks.length}</h2>
     ${tasks.map(taskRow).join('') || '<div class="empty">Sin tareas.</div>'}
@@ -516,7 +531,10 @@ function viewProjectDetail(id) {
   const p = state.projects.find(x => x.id === id);
   if (!p) return '<p>Proyecto no encontrado.</p>';
   const tab = state.projectTab;
-  const tasks = state.tasks.filter(t => t.projectId === id);
+
+  const tasks = sortTasks(state.tasks.filter(t => t.projectId === id)); 
+
+
   const notes = state.notes.filter(n => n.projectId === id);
   const links = state.links.filter(l => l.projectId === id);
   let body = '';
