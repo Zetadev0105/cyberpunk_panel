@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pcb-panel-v4';
+const CACHE_NAME = 'pcb-panel-v11';
 const ASSETS = [
   './',
   './index.html',

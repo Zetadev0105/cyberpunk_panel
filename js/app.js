@@ -424,7 +424,7 @@ function viewPanel() {
         <h3>Hoy · ${todayTasks.length + overdue.length}</h3>
         <div class="card-body">
           ${overdue.length ? `<p style="color:#c33; font-size:11px; margin-bottom:0.3rem;">Vencidas: ${overdue.length}</p>` : ''}
-          ${overdue.concat(todayTasks).slice(0, 12).map(t => `<div class="task-row priority-${t.priority || 'low'}">
+          ${sortTasks(overdue.concat(todayTasks)).slice(0, 12).map(t => `<div class="task-row priority-${t.priority || 'low'}">
             <input type="checkbox" onchange="toggleTask('${t.id}')">
             <span class="title" onclick="editTask('${t.id}')">${escapeHtml(t.title)}</span>
           </div>`).join('') || '<div class="empty">Sin tareas para hoy.</div>'}
