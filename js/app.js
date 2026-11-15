@@ -435,7 +435,7 @@ function viewPanel() {
         <div class="card-body">
           ${recentNotes.map(n => `<div class="task-row">
             ${n.image ? `<img src="${n.image}" class="card-image-sm">` : ''}
-            <span class="title" onclick="editNote('${n.id}')">${escapeHtml(n.title || '(sin título)')}</span>
+            <span class="title" onclick="viewNote('${n.id}')">${escapeHtml(n.title || '(sin título)')}</span>
           </div>`).join('') || '<div class="empty">Sin notas.</div>'}
         </div>
       </div>
@@ -498,7 +498,7 @@ function viewNotes() {
     <div class="notes-grid">
       <div class="note-card new-note" onclick="newNote(currentProjectContext())">+ Nueva nota</div>
       ${sorted.map(n => `
-        <div class="note-card" onclick="editNote('${n.id}')">
+        <div class="note-card" onclick="viewNote('${n.id}')">
           ${n.image ? `<img class="note-image" src="${n.image}" alt="">` : ''}
           <div class="note-title">${escapeHtml(n.title || '(sin título)')}</div>
           <div class="note-preview">${notePreview(n.content)}</div>
@@ -542,7 +542,7 @@ function viewProjectDetail(id) {
   else if (tab === 'notes') {
     body = notes.length
       ? `<div class="notes-grid">${notes.map(n => `
-          <div class="note-card" onclick="editNote('${n.id}')">
+          <div class="note-card" onclick="viewNote('${n.id}')">
             ${n.image ? `<img class="note-image" src="${n.image}" alt="">` : ''}
             <div class="note-title">${escapeHtml(n.title || '(sin título)')}</div>
             <div class="note-preview">${notePreview(n.content)}</div>
@@ -895,7 +895,7 @@ function viewSearch() {
     <h3 style="margin-top:1rem;">Notas (${notes.length})</h3>
     ${notes.length
       ? `<div class="notes-grid">${notes.map(n => `
-          <div class="note-card" onclick="editNote('${n.id}')">
+          <div class="note-card" onclick="viewNote('${n.id}')">
             ${n.image ? `<img class="note-image" src="${n.image}" alt="">` : ''}
             <div class="note-title">${escapeHtml(n.title || '(sin título)')}</div>
             <div class="note-preview">${notePreview(n.content)}</div>
@@ -1068,6 +1068,33 @@ function editNote(id) {
   const n = state.notes.find(x => x.id === id);
   if (!n) return;
   editNoteForm({ ...n, isNew: false });
+}
+
+function viewNote(id) {
+  const n = state.notes.find(x => x.id === id);
+  if (!n) return;
+  const proj = n.projectId ? state.projects.find(p => p.id === n.projectId) : null;
+  
+  openModal(`
+    <h2 style="margin:0 0 0.5rem 0; font-size:1.6rem; font-family:var(--font-display); color:var(--text); text-transform:none;">${escapeHtml(n.title || '(sin título)')}</h2>
+    
+    <div style="display:flex; gap:1rem; font-size:12px; color:var(--text-muted); margin-bottom:1.5rem; flex-wrap:wrap; align-items:center;">
+      ${proj ? `<span>📁 ${escapeHtml(proj.name)}</span>` : ''}
+      ${(n.tags || []).length ? `<span>${(n.tags || []).map(tag => `<span class="tag">${escapeHtml(tag)}</span>`).join('')}</span>` : ''}
+      <span style="margin-left:auto; opacity:0.7;">Actualizada: ${new Date(n.updatedAt).toLocaleString()}</span>
+    </div>
+
+    ${n.image ? `<img src="${n.image}" style="max-width:100%; max-height:300px; border-radius:var(--radius-md); object-fit:cover; margin-bottom:1.5rem; display:block; border:1px solid var(--border);">` : ''}
+    
+    <div class="md-preview" style="border:none; padding:0; min-height:auto; background:transparent; font-size: 14px;">
+      ${md(n.content || '')}
+    </div>
+
+    <div style="margin-top:2rem; display:flex; gap:0.5rem; justify-content:flex-end; border-top:1px solid var(--border); padding-top:1rem;">
+      <button class="btn-ghost" onclick="closeModal()">Cerrar</button>
+      <button class="primary" onclick="editNote('${n.id}')">Editar nota</button>
+    </div>
+  `);
 }
 
 function editNoteForm(note) {

@@ -190,6 +190,20 @@
   filter: drop-shadow(0 0 5px var(--success));
 }
 
+/* --- Notas: Vista de lectura --- */
+.md-preview h2, .md-preview h3, .md-preview h4 {
+  margin-top: 1.2rem;
+  color: var(--accent);
+}
+.md-preview p {
+  margin-bottom: 0.8rem;
+  line-height: 1.6;
+}
+.md-preview ul, .md-preview ol {
+  margin-bottom: 0.8rem;
+  padding-left: 1.5rem;
+}
+
 /* --- Responsive específico de vistas --- */
 @media (max-width: 760px) {
   .panel-grid {
