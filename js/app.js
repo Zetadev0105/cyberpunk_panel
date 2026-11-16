@@ -9,8 +9,18 @@
    SECCIÓN 1 · CONSTANTES Y ESTADO
 ============================================================= */
 const DB_NAME = 'pkm-v0';
-const DB_VERSION = 1;
-const DB_STORES = ['projects','tasks','notes','plans','links','sessions','settings'];
+const DB_VERSION = 2; // <-- CAMBIAR DE 1 A 2
+const DB_STORES = ['projects','tasks','notes','plans','links','sessions','settings', 'events']; // <-- AGREGAR 'events'
+
+function newTask(projectId = null) {
+  editTaskForm({
+    id: uid(), title: '', notes: '', projectId: projectId || null,
+    status: 'pending', priority: 'medium', 
+    dueDate: null, 
+    scheduledDate: todayStr(), // <-- Por defecto, agendamos para hoy
+    tags: [], subtasks: [], recurrence: 'none', isNew: true
+  });
+}
 
 const DEFAULT_SHORTCUTS = {
   newTask:      't',
@@ -40,7 +50,7 @@ const state = {
   projectTab: 'tasks',
   planTab: 'academic',
   perfPlanId: '',
-  tasks: [], notes: [], projects: [], plans: [], links: [], sessions: [],
+  tasks: [], notes: [], projects: [], plans: [], links: [], sessions: [], events: [],
   settings: {
     workDuration: 25,
     breakDuration: 5,
@@ -239,6 +249,7 @@ async function loadAll() {
   state.plans    = await DB.getAll('plans');
   state.links    = await DB.getAll('links');
   state.sessions = await DB.getAll('sessions');
+  state.events   = await DB.getAll('events');
   const s = await DB.get('settings', 'main');
   if (s && s.value) Object.assign(state.settings, s.value);
   state.settings.shortcuts = { ...DEFAULT_SHORTCUTS, ...(state.settings.shortcuts || {}) };
@@ -362,6 +373,10 @@ function taskRow(t) {
     <span class="title" onclick="editTask('${t.id}')" title="${escapeHtml(t.title)}">${escapeHtml(t.title)}</span>
     ${!isDone ? `<button class="btn-play" onclick="event.stopPropagation(); startTaskSession('${t.id}')" title="Iniciar sesión con esta tarea">▶</button>` : ''}
     ${proj ? `<span class="meta">${escapeHtml(proj)}</span>` : ''}
+    
+    <!-- NUEVO: Fecha de ejecución -->
+    ${t.scheduledDate && !isDone ? `<span class="meta" style="color:var(--info);">[Ej: ${t.scheduledDate}]</span>` : ''}
+    
     ${t.dueDate ? `<span class="meta">${t.dueDate}</span>` : ''}
     ${(t.tags || []).map(tag => `<span class="tag">${escapeHtml(tag)}</span>`).join('')}
   </div>`;
@@ -1480,7 +1495,7 @@ function editTaskForm(task) {
       <input type="text" id="task-title" value="${escapeHtml(task.title)}" required autofocus>
       <label>Notas</label>
       <textarea id="task-notes">${escapeHtml(task.notes || '')}</textarea>
-      <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:0.5rem;">
+      <div style="display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:0.5rem;">
         <div><label>Proyecto</label><select id="task-project"><option value="">(Inbox)</option>${state.projects.map(p => `<option value="${p.id}" ${p.id === task.projectId ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('')}</select></div>
         <div><label>Prioridad</label><select id="task-priority">
           <option value="low" ${task.priority === 'low' ? 'selected' : ''}>Baja</option>
@@ -1488,6 +1503,8 @@ function editTaskForm(task) {
           <option value="high" ${task.priority === 'high' ? 'selected' : ''}>Alta</option>
         </select></div>
         <div><label>Vence</label><input type="date" id="task-due" value="${task.dueDate || ''}"></div>
+        <!-- NUEVO CAMPO -->
+        <div><label>Ejecutar</label><input type="date" id="task-scheduled" value="${task.scheduledDate || ''}"></div>
       </div>
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.5rem;">
         <div><label>Recurrencia</label><select id="task-recurrence">
@@ -1533,6 +1550,7 @@ async function submitTask(e, id) {
     projectId: document.getElementById('task-project').value || null,
     priority: document.getElementById('task-priority').value,
     dueDate: document.getElementById('task-due').value || null,
+    scheduledDate: document.getElementById('task-scheduled').value || null,
     recurrence: document.getElementById('task-recurrence').value,
     tags: document.getElementById('task-tags').value.split(',').map(s => s.trim()).filter(Boolean),
     status: existing ? existing.status : 'pending',
