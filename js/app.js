@@ -49,6 +49,7 @@ const state = {
   viewParam: null,
   projectTab: 'tasks',
   planTab: 'academic',
+  workoutTab: 'routines',
   perfPlanId: '',
   calendarDate: new Date().toISOString().slice(0, 10), // Guarda la fecha en YYYY-MM-DD
   calendarMode: 'month', // 'month' o 'week'
@@ -680,8 +681,55 @@ function viewHabits() {
   `;
 }
 
+/* =============================================================
+   MÓDULO DE ENTRENAMIENTO (WORKOUTS)
+============================================================= */
+
 function viewWorkouts() {
-  // Agrupamos ejercicios por músculo principal
+  const tab = state.workoutTab || 'routines';
+  
+  return `
+    <div class="section-header">
+      <h2>Entrenamiento</h2>
+      <div style="display:flex; gap:0.5rem;">
+        ${tab === 'routines' 
+          ? `<button class="primary" onclick="newWorkout()">+ Nueva Rutina</button>` 
+          : `<button class="btn-ghost" onclick="newExercise()">+ Ejercicio</button>`}
+      </div>
+    </div>
+
+    <div class="tabs" style="margin-bottom: 1.5rem;">
+      <button class="${tab === 'routines' ? 'active' : ''}" onclick="state.workoutTab='routines'; render();">Mis Rutinas</button>
+      <button class="${tab === 'library' ? 'active' : ''}" onclick="state.workoutTab='library'; render();">Biblioteca de Ejercicios</button>
+    </div>
+
+    ${tab === 'routines' ? viewRoutines() : viewExerciseLibrary()}
+  `;
+}
+
+function viewRoutines() {
+  return `
+    <div class="grid-auto">
+      ${(state.workouts || []).map(w => {
+        const totalEx = (w.blocks || []).reduce((acc, b) => acc + (b.exercises || []).length, 0);
+        return `
+          <div class="card" style="display:flex; flex-direction:column; justify-content:space-between;">
+            <div>
+              <h3 style="margin:0 0 0.5rem 0; color:var(--accent);">${escapeHtml(w.name)}</h3>
+              <p style="font-size:12px; color:var(--text-muted);">${(w.blocks || []).length} bloques · ${totalEx} ejercicios</p>
+            </div>
+            <div style="display:flex; gap:0.5rem; margin-top:1rem; border-top:1px solid var(--border); padding-top:0.5rem;">
+              <button class="btn-ghost" style="flex:1;" onclick="editWorkout('${w.id}')">Editar</button>
+              <button class="btn-danger" style="padding:2px 8px;" onclick="deleteWorkout('${w.id}')">×</button>
+            </div>
+          </div>
+        `;
+      }).join('') || '<div class="empty">No tenés rutinas creadas. ¡Armá tu primera Push Day!</div>'}
+    </div>
+  `;
+}
+
+function viewExerciseLibrary() {
   const grouped = {};
   state.exercises.forEach(ex => {
     if (!grouped[ex.muscle]) grouped[ex.muscle] = [];
@@ -689,18 +737,6 @@ function viewWorkouts() {
   });
 
   return `
-    <div class="section-header">
-      <h2>Entrenamiento</h2>
-      <div style="display:flex; gap:0.5rem;">
-        <button class="btn-ghost" onclick="newExercise()">+ Ejercicio</button>
-        <button class="primary" onclick="alert('El modo Focus se habilita en la Fase 3')">▶ Empezar Rutina</button>
-      </div>
-    </div>
-
-    <p style="font-size:12px; color:var(--text-muted); margin-bottom:1rem;">
-      Tu biblioteca de ejercicios. Acá podés agregar movimientos personalizados.
-    </p>
-
     <div class="grid-auto">
       ${Object.keys(grouped).sort().map(muscle => `
         <div class="card">
@@ -771,6 +807,149 @@ async function deleteExercise(id) {
   if (!confirm('¿Eliminar este ejercicio de tu biblioteca?')) return;
   await DB.del('exercises', id);
   state.exercises = state.exercises.filter(e => e.id !== id);
+  render();
+}
+
+function newWorkout() {
+  editWorkoutForm({ id: uid(), name: '', blocks: [], isNew: true });
+}
+
+function editWorkout(id) {
+  const w = state.workouts.find(x => x.id === id);
+  if (!w) return;
+  editWorkoutForm({ ...w, isNew: false });
+}
+
+function editWorkoutForm(workout) {
+  openModal(`
+    <div style="width: 800px; max-width: 100%;">
+      <h3>${workout.isNew ? 'Nueva Rutina' : 'Editar Rutina'}</h3>
+      <form onsubmit="submitWorkout(event, '${workout.id}')">
+        <label>Nombre de la Rutina</label>
+        <input type="text" id="workout-name" value="${escapeHtml(workout.name)}" required autofocus placeholder="Ej: Push Day, Pierna, Full Body...">
+        
+        <label>Bloques de Entrenamiento</label>
+        <div id="workout-blocks-container"></div>
+        <button type="button" onclick="addWorkoutBlock()" style="margin-bottom:1rem; font-size:12px;">+ Agregar Bloque</button>
+
+        <div style="margin-top:1rem; display:flex; gap:0.5rem; justify-content:flex-end; border-top: 1px solid var(--border); padding-top: 1rem;">
+          <button type="button" class="btn-ghost" onclick="closeModal()">Cancelar</button>
+          <button type="submit" class="primary">Guardar Rutina</button>
+        </div>
+      </form>
+    </div>
+  `);
+
+  if (workout.isNew) {
+    addWorkoutBlock();
+  } else {
+    (workout.blocks || []).forEach(b => addWorkoutBlock(b));
+  }
+}
+
+function addWorkoutBlock(blockData = null) {
+  const container = document.getElementById('workout-blocks-container');
+  const bData = blockData || { type: 'Normal', exercises: [] };
+  
+  const blockDiv = document.createElement('div');
+  blockDiv.className = 'builder-block';
+  
+  blockDiv.innerHTML = `
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+      <div style="display:flex; align-items:center; gap:0.5rem;">
+        <label style="margin:0; font-size:11px; text-transform:uppercase;">Tipo de Bloque:</label>
+        <select class="block-type" style="width:150px; margin:0; padding:0.2rem;">
+          <option value="Normal" ${bData.type === 'Normal' ? 'selected' : ''}>Normal</option>
+          <option value="Superserie" ${bData.type === 'Superserie' ? 'selected' : ''}>Superserie</option>
+          <option value="Antagonista" ${bData.type === 'Antagonista' ? 'selected' : ''}>Antagonista</option>
+        </select>
+      </div>
+      <button type="button" class="btn-ghost" onclick="this.parentElement.parentElement.remove()" style="color:var(--danger); padding:2px 6px;">Eliminar Bloque</button>
+    </div>
+    
+    <div class="block-exercises"></div>
+    <button type="button" class="btn-ghost" onclick="addExerciseToBlock(this.parentElement)" style="font-size:11px; margin-top:0.5rem;">+ Agregar Ejercicio</button>
+  `;
+  
+  container.appendChild(blockDiv);
+  
+  if (bData.exercises && bData.exercises.length) {
+    bData.exercises.forEach(ex => addExerciseToBlock(blockDiv, ex));
+  } else {
+    addExerciseToBlock(blockDiv);
+  }
+}
+
+function addExerciseToBlock(blockDiv, exData = null) {
+  const container = blockDiv.querySelector('.block-exercises');
+  const eData = exData || { exerciseId: '', targetSets: 3, targetReps: '8-12', targetRir: '' };
+  
+  const grouped = {};
+  state.exercises.forEach(ex => {
+    if (!grouped[ex.muscle]) grouped[ex.muscle] = [];
+    grouped[ex.muscle].push(ex);
+  });
+  const options = Object.keys(grouped).sort().map(muscle => `
+    <optgroup label="${escapeHtml(muscle)}">
+      ${grouped[muscle].map(e => `<option value="${e.id}" ${e.id === eData.exerciseId ? 'selected' : ''}>${escapeHtml(e.name)}</option>`).join('')}
+    </optgroup>
+  `).join('');
+
+  const row = document.createElement('div');
+  row.className = 'builder-exercise-row';
+  row.innerHTML = `
+    <select class="ex-id" required>
+      <option value="" disabled ${!eData.exerciseId ? 'selected' : ''}>Seleccionar Ejercicio...</option>
+      ${options}
+    </select>
+    <input type="number" class="ex-sets" placeholder="Series" value="${eData.targetSets}" required title="Series" min="1">
+    <input type="text" class="ex-reps" placeholder="Reps" value="${escapeHtml(eData.targetReps)}" required title="Repeticiones (ej. 8-12)">
+    <input type="number" class="ex-rir" placeholder="RIR" value="${eData.targetRir}" title="RIR (Opcional)" min="0" max="5">
+    <button type="button" class="btn-ghost" onclick="this.parentElement.remove()" style="color:var(--danger); padding:0;">×</button>
+  `;
+  container.appendChild(row);
+}
+
+async function submitWorkout(e, id) {
+  e.preventDefault();
+  
+  const blocks = [...document.querySelectorAll('.builder-block')].map(bDiv => {
+    const type = bDiv.querySelector('.block-type').value;
+    const exercises = [...bDiv.querySelectorAll('.builder-exercise-row')].map(row => {
+      const exId = row.querySelector('.ex-id').value;
+      const exObj = state.exercises.find(e => e.id === exId);
+      return {
+        exerciseId: exId,
+        name: exObj ? exObj.name : 'Ejercicio Desconocido',
+        targetSets: parseInt(row.querySelector('.ex-sets').value),
+        targetReps: row.querySelector('.ex-reps').value.trim(),
+        targetRir: row.querySelector('.ex-rir').value ? parseInt(row.querySelector('.ex-rir').value) : null
+      };
+    }).filter(ex => ex.exerciseId);
+    
+    return { type, exercises };
+  }).filter(b => b.exercises.length > 0);
+
+  const workout = {
+    id,
+    name: document.getElementById('workout-name').value.trim(),
+    blocks
+  };
+
+  await DB.put('workouts', workout);
+  if (!state.workouts) state.workouts = [];
+  const idx = state.workouts.findIndex(w => w.id === id);
+  if (idx >= 0) state.workouts[idx] = workout;
+  else state.workouts.push(workout);
+
+  closeModal();
+  render();
+}
+
+async function deleteWorkout(id) {
+  if (!confirm('¿Eliminar esta rutina?')) return;
+  await DB.del('workouts', id);
+  state.workouts = state.workouts.filter(w => w.id !== id);
   render();
 }
 

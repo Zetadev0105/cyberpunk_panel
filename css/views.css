@@ -388,6 +388,31 @@
   background: rgba(255, 255, 255, 0.02);
 }
 
+/* --- Constructor de Rutinas --- */
+.builder-block {
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  padding: 0.75rem;
+  margin-bottom: 1rem;
+}
+.builder-exercise-row {
+  display: grid;
+  grid-template-columns: 2fr 70px 70px 70px 30px;
+  gap: 0.5rem;
+  align-items: center;
+  background: var(--surface);
+  padding: 0.5rem;
+  border-radius: var(--radius-sm);
+  margin-bottom: 0.3rem;
+  border: 1px solid var(--border);
+}
+.builder-exercise-row input, .builder-exercise-row select {
+  margin: 0;
+  font-size: 12px;
+  padding: 0.3rem;
+}
+
 /* --- Responsive específico de vistas --- */
 @media (max-width: 760px) {
   .panel-grid {
