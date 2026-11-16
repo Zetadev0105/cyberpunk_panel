@@ -9,8 +9,8 @@
    SECCIÓN 1 · CONSTANTES Y ESTADO
 ============================================================= */
 const DB_NAME = 'pkm-v0';
-const DB_VERSION = 4; // <-- CAMBIAR A 4
-const DB_STORES = ['projects','tasks','notes','plans','links','sessions','settings', 'events', 'habits', 'exercises', 'workouts']; // <-- Agregar 'exercises', 'workouts'
+const DB_VERSION = 5; // <-- CAMBIAR A 5
+const DB_STORES = ['projects','tasks','notes','plans','links','sessions','settings', 'events', 'habits', 'exercises', 'workouts', 'workout_sessions']; // <-- AGREGAR 'workout_sessions'
 
 function newTask(projectId = null) {
   editTaskForm({
@@ -51,10 +51,11 @@ const state = {
   planTab: 'academic',
   workoutTab: 'routines',
   perfPlanId: '',
+  activeWorkout: null,
   calendarDate: new Date().toISOString().slice(0, 10), // Guarda la fecha en YYYY-MM-DD
   calendarMode: 'month', // 'month' o 'week'
   habitMonth: new Date().toISOString().slice(0, 7), // Guarda "YYYY-MM" del mes que estamos viendo
-  tasks: [], notes: [], projects: [], plans: [], links: [], sessions: [], events: [], habits: [],  exercises: [], workouts: [],
+  tasks: [], notes: [], projects: [], plans: [], links: [], sessions: [], events: [], habits: [],  exercises: [], workouts: [], workoutSessions: [],
   settings: {
     workDuration: 25,
     breakDuration: 5,
@@ -257,6 +258,8 @@ async function loadAll() {
   state.habits   = await DB.getAll('habits'); // <-- AGREGAR
   state.exercises = await DB.getAll('exercises'); // <-- NUEVO
   state.workouts  = await DB.getAll('workouts');  // <-- NUEVO
+    state.workouts        = await DB.getAll('workouts');
+  state.workoutSessions = await DB.getAll('workout_sessions'); // <-- NUEVO
   const s = await DB.get('settings', 'main');
   if (s && s.value) Object.assign(state.settings, s.value);
   state.settings.shortcuts = { ...DEFAULT_SHORTCUTS, ...(state.settings.shortcuts || {}) };
@@ -384,6 +387,7 @@ function render() {
     case 'today':     main.innerHTML = viewToday();                break;
     case 'habits':    main.innerHTML = viewHabits();               break;
     case 'workout':   main.innerHTML = viewWorkouts();             break; // <-- NUEVO
+    case 'workout_focus': main.innerHTML = viewFocusWorkout();     break;
     default:          main.innerHTML = '<p>Vista no encontrada.</p>';
   }
   updateTimerDisplays();
@@ -719,6 +723,7 @@ function viewRoutines() {
               <p style="font-size:12px; color:var(--text-muted);">${(w.blocks || []).length} bloques · ${totalEx} ejercicios</p>
             </div>
             <div style="display:flex; gap:0.5rem; margin-top:1rem; border-top:1px solid var(--border); padding-top:0.5rem;">
+              <button class="primary" style="flex:2;" onclick="startWorkoutSession('${w.id}')">▶ Empezar</button>
               <button class="btn-ghost" style="flex:1;" onclick="editWorkout('${w.id}')">Editar</button>
               <button class="btn-danger" style="padding:2px 8px;" onclick="deleteWorkout('${w.id}')">×</button>
             </div>
@@ -951,6 +956,127 @@ async function deleteWorkout(id) {
   await DB.del('workouts', id);
   state.workouts = state.workouts.filter(w => w.id !== id);
   render();
+}
+
+function startWorkoutSession(routineId) {
+  const routine = state.workouts.find(w => w.id === routineId);
+  if (!routine) return;
+
+  // Clonamos la rutina para no modificar la original mientras entrenamos
+  const session = {
+    routineId: routine.id,
+    name: routine.name,
+    startTime: new Date().toISOString(),
+    blocks: routine.blocks.map(b => ({
+      type: b.type,
+      exercises: b.exercises.map(ex => ({
+        exerciseId: ex.exerciseId,
+        name: ex.name,
+        targetSets: ex.targetSets,
+        targetReps: ex.targetReps,
+        targetRir: ex.targetRir,
+        // Creamos las series "vacías" listas para llenar
+        sets: Array.from({ length: ex.targetSets }).map(() => ({
+          weight: '', reps: '', rir: '', done: false
+        }))
+      }))
+    }))
+  };
+
+  state.activeWorkout = session;
+  state.view = 'workout_focus';
+  render();
+}
+
+function cancelWorkoutSession() {
+  if (!confirm('¿Cancelar el entrenamiento actual? No se guardará el progreso.')) return;
+  state.activeWorkout = null;
+  state.view = 'workout';
+  render();
+}
+
+function viewFocusWorkout() {
+  const session = state.activeWorkout;
+  if (!session) return '<div class="empty">No hay entrenamiento activo.</div>';
+
+  return `
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+      <div>
+        <h2 style="margin:0;">${escapeHtml(session.name)}</h2>
+        <p style="font-size:12px; color:var(--text-muted);">Iniciado a las ${new Date(session.startTime).toLocaleTimeString()}</p>
+      </div>
+      <div style="display:flex; gap:0.5rem;">
+        <button class="btn-danger" onclick="cancelWorkoutSession()">Cancelar</button>
+        <button class="primary" onclick="finishWorkoutSession()">Terminar Entrenamiento</button>
+      </div>
+    </div>
+
+    <!-- CONTENEDOR DE TEMPORIZADOR DE DESCANSO (Lo programaremos en el paso 3.2) -->
+    <div id="rest-timer-container" style="display:none; margin-bottom:1rem;"></div>
+
+    <div style="display:flex; flex-direction:column; gap:1rem;">
+      ${session.blocks.map((block, bIdx) => `
+        <div class="builder-block">
+          <div style="display:flex; justify-content:space-between; margin-bottom:0.5rem;">
+            <h3 style="margin:0; color:var(--accent);">${escapeHtml(block.type)}</h3>
+          </div>
+          
+          ${block.exercises.map((ex, eIdx) => `
+            <div style="background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-md); padding:0.75rem; margin-bottom:0.75rem;">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+                <h4 style="margin:0; font-size:1rem;">${escapeHtml(ex.name)}</h4>
+                <span style="font-size:11px; color:var(--text-muted);">Objetivo: ${ex.targetSets} x ${ex.targetReps} ${ex.targetRir ? `(RIR ${ex.targetRir})` : ''}</span>
+              </div>
+              
+              <!-- Cabecera de la tabla de series -->
+              <div style="display:grid; grid-template-columns: 30px 1fr 1fr 1fr 50px; gap:0.5rem; font-size:11px; color:var(--text-muted); text-align:center; margin-bottom:0.2rem; text-transform:uppercase;">
+                <div>Set</div>
+                <div>Peso (kg)</div>
+                <div>Reps</div>
+                <div>RIR</div>
+                <div>Listo</div>
+              </div>
+
+              <!-- Filas de series -->
+              ${ex.sets.map((set, sIdx) => `
+                <div style="display:grid; grid-template-columns: 30px 1fr 1fr 1fr 50px; gap:0.5rem; align-items:center; margin-bottom:0.3rem; text-align:center;">
+                  <div style="font-weight:bold; color:var(--text-muted);">${sIdx + 1}</div>
+                  <input type="number" value="${set.weight}" placeholder="-" onchange="updateWorkoutSet(${bIdx}, ${eIdx}, ${sIdx}, 'weight', this.value)" style="margin:0; text-align:center; background:${set.done ? 'var(--surface-2)' : 'var(--surface-input)'};">
+                  <input type="number" value="${set.reps}" placeholder="-" onchange="updateWorkoutSet(${bIdx}, ${eIdx}, ${sIdx}, 'reps', this.value)" style="margin:0; text-align:center; background:${set.done ? 'var(--surface-2)' : 'var(--surface-input)'};">
+                  <input type="number" value="${set.rir}" placeholder="-" onchange="updateWorkoutSet(${bIdx}, ${eIdx}, ${sIdx}, 'rir', this.value)" style="margin:0; text-align:center; background:${set.done ? 'var(--surface-2)' : 'var(--surface-input)'};">
+                  <div>
+                    <div class="habit-check ${set.done ? 'done' : ''}" onclick="toggleWorkoutSet(${bIdx}, ${eIdx}, ${sIdx})"></div>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          `).join('')}
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+function updateWorkoutSet(bIdx, eIdx, sIdx, field, value) {
+  if (!state.activeWorkout) return;
+  state.activeWorkout.blocks[bIdx].exercises[eIdx].sets[sIdx][field] = value;
+  // No hacemos render aquí para no perder el foco en el input
+}
+
+function toggleWorkoutSet(bIdx, eIdx, sIdx) {
+  if (!state.activeWorkout) return;
+  const set = state.activeWorkout.blocks[bIdx].exercises[eIdx].sets[sIdx];
+  set.done = !set.done;
+  
+  // Si se marca como hecho, podríamos iniciar el temporizador de descanso (Paso 3.2)
+  
+  render();
+}
+
+function finishWorkoutSession() {
+  if (!confirm('¿Terminar y guardar el entrenamiento?')) return;
+  // Esta función la programaremos en el Paso 3.2 junto con el guardado en DB
+  alert('El guardado en la base de datos se habilita en el siguiente paso.');
 }
 
 async function toggleHabit(habitId, dateStr) {
