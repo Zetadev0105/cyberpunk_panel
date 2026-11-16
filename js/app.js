@@ -1240,6 +1240,13 @@ function viewFocusWorkout() {
   const session = state.activeWorkout;
   if (!session) return '<div class="empty">No hay entrenamiento activo.</div>';
 
+  // NUEVO: Calculamos el tiempo transcurrido en este mismo instante para que no parpadee en 00:00:00
+  const diff = Math.floor((Date.now() - new Date(session.startTime).getTime()) / 1000);
+  const h = Math.floor(diff / 3600).toString().padStart(2, '0');
+  const m = Math.floor((diff % 3600) / 60).toString().padStart(2, '0');
+  const s = (diff % 60).toString().padStart(2, '0');
+  const chronoText = `${h}:${m}:${s}`;
+
   return `
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
       <div>
@@ -1261,7 +1268,8 @@ function viewFocusWorkout() {
       <!-- Reloj Total (Amarillo) -->
       <div style="flex:1; background:var(--surface-2); border:1px solid var(--accent); border-radius:var(--radius-md); padding:0.5rem 1rem; display:flex; justify-content:space-between; align-items:center;">
         <div style="font-size:1rem; color:var(--accent); font-weight:bold; text-transform:uppercase;">⏱️ Tiempo Total</div>
-        <div id="workout-chrono-display" style="font-size:1.8rem; font-family:var(--font-display); color:var(--accent); font-weight:bold; text-shadow:var(--glow-yellow);">00:00:00</div>
+        <!-- ACÁ USAMOS LA VARIABLE chronoText EN VEZ DE 00:00:00 -->
+        <div id="workout-chrono-display" style="font-size:1.8rem; font-family:var(--font-display); color:var(--accent); font-weight:bold; text-shadow:var(--glow-yellow);">${chronoText}</div>
       </div>
       
       <!-- Reloj Descanso (Cian - Oculto por defecto) -->
