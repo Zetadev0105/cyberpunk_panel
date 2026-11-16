@@ -714,6 +714,123 @@ function buildCalendarCell(dateObj, isOtherMonth, todayObj) {
   `;
 }
 
+function openDayModal(dateStr) {
+  const tasksForDay = state.tasks.filter(t => t.scheduledDate === dateStr);
+  
+  const examsForDay = [];
+  state.plans.forEach(p => {
+    getPlanPeriods(p).forEach(per => {
+      (per.subjects || []).forEach(sub => {
+        (sub.exams || []).filter(ex => ex.date === dateStr).forEach(ex => {
+          examsForDay.push({ ...ex, subjectName: sub.name, planName: p.name });
+        });
+      });
+    });
+  });
+
+  const eventsForDay = (state.events || []).filter(e => e.date === dateStr);
+  const dateFormatted = new Date(dateStr + 'T00:00:00').toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+
+  openModal(`
+    <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:1rem; border-bottom:1px solid var(--border); padding-bottom:0.5rem;">
+      <h3 style="margin:0; text-transform:capitalize; color:var(--accent);">${dateFormatted}</h3>
+      <button class="primary" onclick="newEvent('${dateStr}')">+ Evento</button>
+    </div>
+
+    <div style="margin-bottom:1rem;">
+      <h4 style="font-size:12px; color:var(--text-muted); text-transform:uppercase; margin-bottom:0.5rem;">📅 Eventos y Actividades</h4>
+      ${eventsForDay.length ? eventsForDay.map(e => `
+        <div class="task-row" style="border-left:3px solid var(--success); background:rgba(0,255,159,0.05);">
+          <span class="title" style="font-weight:bold;">${escapeHtml(e.title)}</span>
+          <span class="meta">${e.time || ''}</span>
+          <button class="btn-ghost" onclick="deleteEvent('${e.id}')" style="padding:2px 6px;">×</button>
+        </div>
+      `).join('') : '<div class="empty" style="padding:0.2rem;">No hay eventos.</div>'}
+    </div>
+
+    <div style="margin-bottom:1rem;">
+      <h4 style="font-size:12px; color:var(--text-muted); text-transform:uppercase; margin-bottom:0.5rem;">📝 Tareas</h4>
+      ${tasksForDay.length ? tasksForDay.map(t => `
+        <div class="task-row" style="border-left:3px solid ${t.status === 'done' ? 'var(--accent)' : 'var(--info)'};">
+          <input type="checkbox" ${t.status === 'done' ? 'checked' : ''} onchange="toggleTask('${t.id}'); render();">
+          <span class="title" style="${t.status === 'done' ? 'text-decoration:line-through; opacity:0.5;' : ''}">${escapeHtml(t.title)}</span>
+          <button class="btn-ghost" onclick="closeModal(); editTask('${t.id}')" style="padding:2px 6px; font-size:10px;">✎</button>
+        </div>
+      `).join('') : '<div class="empty" style="padding:0.2rem;">No hay tareas.</div>'}
+    </div>
+
+    <div style="margin-bottom:1rem;">
+      <h4 style="font-size:12px; color:var(--text-muted); text-transform:uppercase; margin-bottom:0.5rem;">🎓 Exámenes</h4>
+      ${examsForDay.length ? examsForDay.map(ex => `
+        <div class="task-row" style="border-left:3px solid ${ex.grade ? 'var(--accent)' : 'var(--danger)'};">
+          <span class="title">${escapeHtml(ex.name)} <span style="font-size:11px; color:var(--text-muted);">(${escapeHtml(ex.subjectName)})</span></span>
+          <span class="meta" style="color:${ex.grade ? 'var(--accent)' : 'var(--danger)'};">${ex.grade ? 'Nota: '+ex.grade : 'Pendiente'}</span>
+        </div>
+      `).join('') : '<div class="empty" style="padding:0.2rem;">No hay exámenes.</div>'}
+    </div>
+
+    <div style="margin-top:1.5rem; text-align:right;">
+      <button class="btn-ghost" onclick="closeModal()">Cerrar</button>
+    </div>
+  `);
+}
+
+function newEvent(dateStr = null) {
+  const defaultDate = dateStr || state.calendarDate || todayStr();
+  openModal(`
+    <h3>Nuevo Evento</h3>
+    <form onsubmit="submitEvent(event)">
+      <label>Título</label>
+      <input type="text" id="event-title" required autofocus placeholder="Ej: Cumpleaños de Juan, Partido de fútbol...">
+      
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.5rem;">
+        <div>
+          <label>Fecha</label>
+          <input type="date" id="event-date" value="${defaultDate}" required>
+        </div>
+        <div>
+          <label>Hora (Opcional)</label>
+          <input type="time" id="event-time">
+        </div>
+      </div>
+
+      <label>Descripción (Opcional)</label>
+      <textarea id="event-desc" style="min-height:60px;"></textarea>
+
+      <div style="margin-top:1rem; display:flex; gap:0.5rem; justify-content:flex-end;">
+        <button type="button" class="btn-ghost" onclick="closeModal()">Cancelar</button>
+        <button type="submit" class="primary">Guardar Evento</button>
+      </div>
+    </form>
+  `);
+}
+
+async function submitEvent(e) {
+  e.preventDefault();
+  const newEv = {
+    id: uid(),
+    title: document.getElementById('event-title').value.trim(),
+    date: document.getElementById('event-date').value,
+    time: document.getElementById('event-time').value,
+    desc: document.getElementById('event-desc').value.trim()
+  };
+
+  await DB.put('events', newEv);
+  if (!state.events) state.events = [];
+  state.events.push(newEv);
+  
+  closeModal();
+  render();
+}
+
+async function deleteEvent(id) {
+  if (!confirm('¿Eliminar este evento?')) return;
+  await DB.del('events', id);
+  state.events = state.events.filter(e => e.id !== id);
+  closeModal();
+  render();
+}
+
 function viewInbox() {
   const inbox = state.tasks.filter(t => !t.projectId && t.status !== 'archived');
   return `
