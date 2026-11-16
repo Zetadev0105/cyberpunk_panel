@@ -50,6 +50,8 @@ const state = {
   projectTab: 'tasks',
   planTab: 'academic',
   perfPlanId: '',
+  calendarDate: new Date().toISOString().slice(0, 10), // Guarda la fecha en YYYY-MM-DD
+  calendarMode: 'month', // 'month' o 'week'
   tasks: [], notes: [], projects: [], plans: [], links: [], sessions: [], events: [],
   settings: {
     workDuration: 25,
@@ -357,6 +359,8 @@ function render() {
     case 'tags':      main.innerHTML = viewTags();                 break;
     case 'settings':  main.innerHTML = viewSettings();             break;
     case 'search':    main.innerHTML = viewSearch();               break;
+    case 'calendar':  main.innerHTML = viewCalendar();             break;
+    case 'today':     main.innerHTML = viewToday();                break;
     default:          main.innerHTML = '<p>Vista no encontrada.</p>';
   }
   updateTimerDisplays();
@@ -554,6 +558,159 @@ function viewToday() {
     
     <h3 style="margin-top:1rem;">Próximos 7 días · ${next7.length}</h3>
     ${next7.map(taskRow).join('') || '<div class="empty">Sin tareas próximas.</div>'}
+  `;
+}
+
+function getDaysInMonth(year, month) {
+  return new Date(year, month + 1, 0).getDate();
+}
+
+function changeCalendarDate(offset, unit) {
+  let d = new Date(state.calendarDate + 'T00:00:00');
+  if (unit === 'month') d.setMonth(d.getMonth() + offset);
+  if (unit === 'week') d.setDate(d.getDate() + (offset * 7));
+  state.calendarDate = d.toISOString().slice(0, 10);
+  render();
+}
+
+function setCalendarToday() {
+  state.calendarDate = todayStr();
+  render();
+}
+
+function setCalendarMode(mode) {
+  state.calendarMode = mode;
+  render();
+}
+
+function getItemsForDate(dateStr) {
+  const items = [];
+  
+  // 1. Tareas
+  state.tasks.filter(t => t.scheduledDate === dateStr).forEach(t => {
+    items.push({ type: t.status === 'done' ? 'task-done' : 'task-pending', label: t.title, id: t.id });
+  });
+
+  // 2. Exámenes (Buscamos en todos los planes)
+  state.plans.forEach(p => {
+    const periods = getPlanPeriods(p);
+    periods.forEach(per => {
+      (per.subjects || []).forEach(sub => {
+        (sub.exams || []).filter(ex => ex.date === dateStr).forEach(ex => {
+          const isDone = ex.grade != null && ex.grade !== '';
+          items.push({ type: isDone ? 'exam-done' : 'exam-pending', label: `${sub.name}: ${ex.name}`, id: ex.id });
+        });
+      });
+    });
+  });
+
+  // 3. Eventos
+  (state.events || []).filter(e => e.date === dateStr).forEach(e => {
+    items.push({ type: 'event', label: e.title, id: e.id });
+  });
+
+  return items;
+}
+
+function viewCalendar() {
+  const current = new Date(state.calendarDate + 'T00:00:00');
+  const today = new Date(); today.setHours(0,0,0,0);
+  const year = current.getFullYear();
+  const month = current.getMonth();
+  
+  const monthNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+  const dayNames = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
+
+  let headerTitle = `${monthNames[month]} ${year}`;
+  let cellsHTML = '';
+  
+  if (state.calendarMode === 'month') {
+    // Configuración para vista mensual
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    
+    // Ajustamos para que la semana empiece el Lunes (0 = Lunes, 6 = Domingo)
+    let startDay = firstDay.getDay() === 0 ? 6 : firstDay.getDay() - 1; 
+    const totalDays = lastDay.getDate();
+    
+    // Días del mes anterior para rellenar
+    const prevMonthLastDay = new Date(year, month, 0).getDate();
+    for (let i = startDay - 1; i >= 0; i--) {
+      const d = new Date(year, month - 1, prevMonthLastDay - i);
+      cellsHTML += buildCalendarCell(d, true, today);
+    }
+    
+    // Días del mes actual
+    for (let i = 1; i <= totalDays; i++) {
+      const d = new Date(year, month, i);
+      cellsHTML += buildCalendarCell(d, false, today);
+    }
+    
+    // Días del mes siguiente para completar la grilla (hasta 42 celdas)
+    const totalCells = startDay + totalDays;
+    const nextDays = totalCells % 7 === 0 ? 0 : 7 - (totalCells % 7);
+    for (let i = 1; i <= nextDays; i++) {
+      const d = new Date(year, month + 1, i);
+      cellsHTML += buildCalendarCell(d, true, today);
+    }
+  } else {
+    // Configuración para vista semanal
+    const dayOfWeek = current.getDay() === 0 ? 6 : current.getDay() - 1; // 0 = Lunes
+    const startOfWeek = new Date(current);
+    startOfWeek.setDate(current.getDate() - dayOfWeek);
+    
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(startOfWeek.getDate() + 6);
+    
+    headerTitle = `${startOfWeek.getDate()} ${monthNames[startOfWeek.getMonth()]} - ${endOfWeek.getDate()} ${monthNames[endOfWeek.getMonth()]} ${endOfWeek.getFullYear()}`;
+
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(startOfWeek);
+      d.setDate(startOfWeek.getDate() + i);
+      cellsHTML += buildCalendarCell(d, false, today);
+    }
+  }
+
+  return `
+    <div class="section-header">
+      <h2>Calendario</h2>
+      <button class="primary" onclick="newEvent()">+ Evento</button>
+    </div>
+
+    <div class="calendar-header">
+      <div style="display:flex; gap:0.5rem;">
+        <button class="btn-ghost" onclick="changeCalendarDate(-1, '${state.calendarMode}')">←</button>
+        <button class="btn-ghost" onclick="setCalendarToday()">Hoy</button>
+        <button class="btn-ghost" onclick="changeCalendarDate(1, '${state.calendarMode}')">→</button>
+      </div>
+      
+      <h3 style="margin:0; text-transform:uppercase; color:var(--accent);">${headerTitle}</h3>
+      
+      <div style="display:flex; gap:0.2rem; background:var(--surface-input); padding:2px; border-radius:var(--radius-sm);">
+        <button class="${state.calendarMode === 'month' ? 'primary' : 'btn-ghost'}" style="padding:2px 10px; font-size:11px;" onclick="setCalendarMode('month')">Mes</button>
+        <button class="${state.calendarMode === 'week' ? 'primary' : 'btn-ghost'}" style="padding:2px 10px; font-size:11px;" onclick="setCalendarMode('week')">Semana</button>
+      </div>
+    </div>
+
+    <div class="calendar-grid ${state.calendarMode === 'week' ? 'week-view' : ''}">
+      ${dayNames.map(d => `<div class="calendar-day-header">${d}</div>`).join('')}
+      ${cellsHTML}
+    </div>
+  `;
+}
+
+function buildCalendarCell(dateObj, isOtherMonth, todayObj) {
+  const dStr = dateObj.toISOString().slice(0, 10);
+  const isToday = dateObj.getTime() === todayObj.getTime();
+  const items = getItemsForDate(dStr);
+  
+  return `
+    <div class="calendar-cell ${isOtherMonth ? 'other-month' : ''} ${isToday ? 'today' : ''}" onclick="openDayModal('${dStr}')">
+      <div class="calendar-date">${dateObj.getDate()}</div>
+      <div class="calendar-dots">
+        ${items.map(i => `<div class="cal-dot dot-${i.type}">${escapeHtml(i.label)}</div>`).join('')}
+      </div>
+    </div>
   `;
 }
 

@@ -209,7 +209,102 @@
   background: var(--surface-input);
   border-color: var(--border);
 }
+/* --- Calendario --- */
+.calendar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  background: var(--surface-2);
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+}
 
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+  background: var(--border);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.calendar-day-header {
+  background: var(--surface-2);
+  padding: 0.5rem;
+  text-align: center;
+  font-size: 12px;
+  font-weight: bold;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.calendar-cell {
+  background: var(--surface);
+  min-height: 100px;
+  padding: 0.5rem;
+  position: relative;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.calendar-cell:hover {
+  background: var(--surface-hover);
+}
+
+.calendar-cell.other-month {
+  background: var(--bg);
+  opacity: 0.6;
+}
+
+.calendar-cell.today {
+  border: 1px solid var(--accent);
+  box-shadow: inset 0 0 10px rgba(252, 238, 10, 0.1);
+}
+
+.calendar-date {
+  font-weight: bold;
+  font-size: 14px;
+  margin-bottom: 0.5rem;
+  display: inline-block;
+}
+
+.calendar-cell.today .calendar-date {
+  color: var(--accent);
+  text-shadow: var(--glow-yellow);
+}
+
+/* Vista Semanal (más alta) */
+.calendar-grid.week-view .calendar-cell {
+  min-height: 250px;
+}
+
+/* Puntitos de eventos */
+.calendar-dots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+
+.cal-dot {
+  font-size: 10px;
+  padding: 1px 4px;
+  border-radius: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+
+/* Colores de los eventos */
+.dot-task-pending { background: rgba(0, 255, 240, 0.15); color: var(--info); border: 1px solid rgba(0,255,240,0.3); }
+.dot-task-done { background: rgba(252, 238, 10, 0.15); color: var(--accent); border: 1px solid rgba(252,238,10,0.3); text-decoration: line-through; }
+.dot-exam-pending { background: rgba(255, 0, 60, 0.15); color: var(--danger); border: 1px solid rgba(255,0,60,0.3); }
+.dot-exam-done { background: rgba(252, 238, 10, 0.15); color: var(--accent); border: 1px solid rgba(252,238,10,0.3); text-decoration: line-through; }
+.dot-event { background: rgba(0, 255, 159, 0.15); color: var(--success); border: 1px solid rgba(0,255,159,0.3); }
 /* --- Responsive específico de vistas --- */
 @media (max-width: 760px) {
   .panel-grid {
