@@ -390,6 +390,7 @@ function render() {
     case 'today':     main.innerHTML = viewToday();                break;
     case 'habits':    main.innerHTML = viewHabits();               break;
     case 'workout':   main.innerHTML = viewWorkouts();             break; // <-- NUEVO
+    case 'workout_performance': main.innerHTML = viewWorkoutPerformance(); break;
     case 'workout_focus': main.innerHTML = viewFocusWorkout();     break;
     default:          main.innerHTML = '<p>Vista no encontrada.</p>';
   }
@@ -959,6 +960,126 @@ async function deleteWorkout(id) {
   await DB.del('workouts', id);
   state.workouts = state.workouts.filter(w => w.id !== id);
   render();
+}
+
+function viewWorkoutPerformance() {
+  const sessions = state.workoutSessions || [];
+  
+  // 1. Calcular métricas generales
+  let totalVolume = 0;
+  let totalTime = 0;
+  const volumeByMuscle = {};
+
+  sessions.forEach(session => {
+    totalTime += (session.duration || 0);
+    
+    (session.blocks || []).forEach(block => {
+      (block.exercises || []).forEach(ex => {
+        // Buscamos el músculo en la biblioteca
+        const libEx = state.exercises.find(e => e.id === ex.exerciseId);
+        const muscle = libEx ? libEx.muscle : 'Otros';
+
+        (ex.sets || []).forEach(set => {
+          if (set.done) {
+            const w = parseFloat(set.weight) || 0;
+            const r = parseFloat(set.reps) || 0;
+            const vol = w * r;
+            
+            totalVolume += vol;
+            if (!volumeByMuscle[muscle]) volumeByMuscle[muscle] = 0;
+            volumeByMuscle[muscle] += vol;
+          }
+        });
+      });
+    });
+  });
+
+  // Ordenamos los músculos por volumen (de mayor a menor)
+  const sortedMuscles = Object.entries(volumeByMuscle).sort((a, b) => b[1] - a[1]);
+  const maxVol = sortedMuscles.length ? sortedMuscles[0][1] : 1;
+
+  // Historial ordenado del más reciente al más viejo
+  const sortedSessions = [...sessions].sort((a, b) => new Date(b.startTime) - new Date(a.startTime));
+
+  return `
+    <div class="section-header">
+      <h2>Rendimiento Entrenamientos</h2>
+    </div>
+
+    <div class="grid-auto" style="margin-bottom: 2rem;">
+      <!-- Tarjeta de Sesiones -->
+      <div class="card" style="display:flex; flex-direction:column; justify-content:center; align-items:center; min-height:120px;">
+        <h3 style="color:var(--text-muted); margin:0; font-size:12px; text-transform:uppercase;">Sesiones Totales</h3>
+        <div style="font-size:3rem; font-family:var(--font-display); color:var(--info); text-shadow:0 0 15px rgba(0,255,240,0.4);">${sessions.length}</div>
+      </div>
+
+      <!-- Tarjeta de Tiempo -->
+      <div class="card" style="display:flex; flex-direction:column; justify-content:center; align-items:center; min-height:120px;">
+        <h3 style="color:var(--text-muted); margin:0; font-size:12px; text-transform:uppercase;">Tiempo en el Gym</h3>
+        <div style="font-size:2.5rem; font-family:var(--font-display); color:var(--warning); text-shadow:0 0 15px rgba(255,176,0,0.4);">
+          ${Math.floor(totalTime / 3600)}h ${Math.floor((totalTime % 3600) / 60)}m
+        </div>
+      </div>
+
+      <!-- Tarjeta de Volumen -->
+      <div class="card" style="display:flex; flex-direction:column; justify-content:center; align-items:center; min-height:120px;">
+        <h3 style="color:var(--text-muted); margin:0; font-size:12px; text-transform:uppercase;">Volumen Total</h3>
+        <div style="font-size:2.5rem; font-family:var(--font-display); color:var(--accent); text-shadow:var(--glow-yellow);">
+          ${totalVolume.toLocaleString()} <span style="font-size:1rem;">kg</span>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:grid; grid-template-columns: 1fr 2fr; gap:1rem; align-items:start;">
+      <!-- Panel de Distribución Muscular -->
+      <div class="card">
+        <h3>Volumen por Músculo</h3>
+        <p style="font-size:11px; color:var(--text-muted); margin-bottom:1rem;">Distribución de tu esfuerzo acumulado.</p>
+        ${sortedMuscles.length ? sortedMuscles.map(([muscle, vol]) => {
+          const pct = Math.round((vol / maxVol) * 100);
+          return `
+            <div class="usage-summary-row">
+              <span class="name" style="min-width:80px;">${escapeHtml(muscle)}</span>
+              <div class="usage-bar-bg">
+                <div class="usage-bar-fill" style="width:${pct}%; background:var(--accent); box-shadow:var(--glow-yellow);"></div>
+              </div>
+              <span class="val">${vol.toLocaleString()} kg</span>
+            </div>
+          `;
+        }).join('') : '<div class="empty">Sin datos suficientes.</div>'}
+      </div>
+
+      <!-- Panel de Historial -->
+      <div class="card">
+        <h3>Historial de Sesiones</h3>
+        <div style="display:flex; flex-direction:column; gap:0.5rem; margin-top:1rem;">
+          ${sortedSessions.length ? sortedSessions.map(s => {
+            // Recalcular volumen de esta sesión específica
+            let sVol = 0;
+            (s.blocks || []).forEach(b => b.exercises.forEach(e => e.sets.forEach(set => {
+              if (set.done) sVol += (parseFloat(set.weight)||0) * (parseFloat(set.reps)||0);
+            })));
+
+            const dateStr = new Date(s.startTime).toLocaleDateString('es-ES', { weekday:'long', day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' });
+            
+            return `
+              <div class="task-row" style="border-left:3px solid var(--accent); background:var(--surface-2); padding:0.75rem; border-radius:var(--radius-sm); align-items:flex-start; flex-direction:column; gap:0.3rem;">
+                <div style="display:flex; justify-content:space-between; width:100%;">
+                  <span style="font-weight:bold; color:var(--text); font-size:1.05rem;">${escapeHtml(s.name)}</span>
+                  <span style="font-size:12px; color:var(--text-muted); text-transform:capitalize;">${dateStr}</span>
+                </div>
+                <div style="display:flex; gap:1rem; font-size:12px; color:var(--text-soft); margin-top:0.2rem;">
+                  <span>⏱️ ${formatDuration(s.duration)}</span>
+                  <span>🏋️ ${sVol.toLocaleString()} kg</span>
+                  <span>📦 ${(s.blocks || []).reduce((a, b) => a + b.exercises.length, 0)} ejercicios</span>
+                </div>
+              </div>
+            `;
+          }).join('') : '<div class="empty">Aún no registraste entrenamientos.</div>'}
+        </div>
+      </div>
+    </div>
+  `;
 }
 
 function startWorkoutSession(routineId) {
