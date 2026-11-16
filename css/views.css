@@ -305,6 +305,89 @@
 .dot-exam-pending { background: rgba(255, 0, 60, 0.15); color: var(--danger); border: 1px solid rgba(255,0,60,0.3); }
 .dot-exam-done { background: rgba(252, 238, 10, 0.15); color: var(--accent); border: 1px solid rgba(252,238,10,0.3); text-decoration: line-through; }
 .dot-event { background: rgba(0, 255, 159, 0.15); color: var(--success); border: 1px solid rgba(0,255,159,0.3); }
+
+/* --- Habit Tracker --- */
+.habit-table-container {
+  overflow-x: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  margin-top: 1rem;
+}
+
+.habit-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 800px; /* Para que no se aplasten los días */
+}
+
+.habit-table th, .habit-table td {
+  border: 1px solid var(--border-soft);
+  padding: 0.4rem;
+  text-align: center;
+  font-size: 12px;
+}
+
+.habit-table th {
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font-weight: normal;
+  position: sticky;
+  top: 0;
+}
+
+.habit-name-cell {
+  text-align: left !important;
+  padding-left: 1rem !important;
+  min-width: 180px;
+  position: sticky;
+  left: 0;
+  background: var(--surface);
+  z-index: 2;
+  border-right: 2px solid var(--border) !important;
+}
+
+.habit-check {
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--surface-input);
+  cursor: pointer;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+
+.habit-check:hover {
+  border-color: var(--accent);
+}
+
+.habit-check.done {
+  background: var(--accent);
+  border-color: var(--accent);
+  box-shadow: var(--glow-yellow);
+}
+
+.habit-check.done::after {
+  content: '✔';
+  color: var(--text-inverse);
+  font-size: 14px;
+  font-weight: bold;
+}
+
+.habit-check.disabled {
+  opacity: 0.2;
+  cursor: not-allowed;
+  background: transparent;
+}
+
+.habit-weekend {
+  background: rgba(255, 255, 255, 0.02);
+}
+
 /* --- Responsive específico de vistas --- */
 @media (max-width: 760px) {
   .panel-grid {

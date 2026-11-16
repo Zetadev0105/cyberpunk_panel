@@ -9,8 +9,8 @@
    SECCIÓN 1 · CONSTANTES Y ESTADO
 ============================================================= */
 const DB_NAME = 'pkm-v0';
-const DB_VERSION = 2; // <-- CAMBIAR DE 1 A 2
-const DB_STORES = ['projects','tasks','notes','plans','links','sessions','settings', 'events']; // <-- AGREGAR 'events'
+const DB_VERSION = 3; // <-- CAMBIAR A 3
+const DB_STORES = ['projects','tasks','notes','plans','links','sessions','settings', 'events', 'habits']; // <-- AGREGAR 'habits'
 
 function newTask(projectId = null) {
   editTaskForm({
@@ -52,7 +52,8 @@ const state = {
   perfPlanId: '',
   calendarDate: new Date().toISOString().slice(0, 10), // Guarda la fecha en YYYY-MM-DD
   calendarMode: 'month', // 'month' o 'week'
-  tasks: [], notes: [], projects: [], plans: [], links: [], sessions: [], events: [],
+  habitMonth: new Date().toISOString().slice(0, 7), // Guarda "YYYY-MM" del mes que estamos viendo
+  tasks: [], notes: [], projects: [], plans: [], links: [], sessions: [], events: [], habits: [],
   settings: {
     workDuration: 25,
     breakDuration: 5,
@@ -252,6 +253,7 @@ async function loadAll() {
   state.links    = await DB.getAll('links');
   state.sessions = await DB.getAll('sessions');
   state.events   = await DB.getAll('events');
+  state.habits   = await DB.getAll('habits'); // <-- AGREGAR
   const s = await DB.get('settings', 'main');
   if (s && s.value) Object.assign(state.settings, s.value);
   state.settings.shortcuts = { ...DEFAULT_SHORTCUTS, ...(state.settings.shortcuts || {}) };
@@ -361,6 +363,7 @@ function render() {
     case 'search':    main.innerHTML = viewSearch();               break;
     case 'calendar':  main.innerHTML = viewCalendar();             break;
     case 'today':     main.innerHTML = viewToday();                break;
+    case 'habits':    main.innerHTML = viewHabits();               break;
     default:          main.innerHTML = '<p>Vista no encontrada.</p>';
   }
   updateTimerDisplays();
@@ -580,6 +583,140 @@ function setCalendarToday() {
 
 function setCalendarMode(mode) {
   state.calendarMode = mode;
+  render();
+}
+
+function changeHabitMonth(offset) {
+  let d = new Date(state.habitMonth + '-01T00:00:00');
+  d.setMonth(d.getMonth() + offset);
+  state.habitMonth = d.toISOString().slice(0, 7);
+  render();
+}
+
+function viewHabits() {
+  const [year, month] = state.habitMonth.split('-').map(Number);
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const monthNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+  
+  // Array de días [1, 2, 3 ... 30]
+  const daysArray = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+
+  return `
+    <div class="section-header">
+      <h2>Hábitos</h2>
+      <button class="primary" onclick="newHabit()">+ Nuevo Hábito</button>
+    </div>
+
+    <div class="calendar-header">
+      <div style="display:flex; gap:0.5rem;">
+        <button class="btn-ghost" onclick="changeHabitMonth(-1)">←</button>
+        <button class="btn-ghost" onclick="state.habitMonth='${todayStr().slice(0,7)}'; render();">Mes Actual</button>
+        <button class="btn-ghost" onclick="changeHabitMonth(1)">→</button>
+      </div>
+      <h3 style="margin:0; text-transform:uppercase; color:var(--accent);">${monthNames[month - 1]} ${year}</h3>
+      <div style="width: 120px;"></div> <!-- Espaciador para centrar el título -->
+    </div>
+
+    <div class="habit-table-container">
+      ${state.habits.length ? `
+        <table class="habit-table">
+          <thead>
+            <tr>
+              <th class="habit-name-cell">Hábito</th>
+              ${daysArray.map(d => {
+                const dateObj = new Date(year, month - 1, d);
+                const isWeekend = dateObj.getDay() === 0 || dateObj.getDay() === 6;
+                return `<th class="${isWeekend ? 'habit-weekend' : ''}">${d}</th>`;
+              }).join('')}
+              <th style="min-width: 40px;"></th>
+            </tr>
+          </thead>
+          <tbody>
+            ${state.habits.map(habit => `
+              <tr>
+                <td class="habit-name-cell">
+                  <div style="display:flex; align-items:center; gap:0.5rem;">
+                    <span style="font-size:1.2rem;">${habit.icon || '⭐'}</span>
+                    <span style="font-weight:bold; color:var(--text);">${escapeHtml(habit.name)}</span>
+                  </div>
+                </td>
+                ${daysArray.map(d => {
+                  const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+                  const isDone = habit.history && habit.history[dateStr];
+                  const isFuture = new Date(dateStr + 'T23:59:59') < new Date(); // Bloquear días futuros? Mejor dejarlo libre por ahora
+                  
+                  return `<td>
+                    <div class="habit-check ${isDone ? 'done' : ''}" onclick="toggleHabit('${habit.id}', '${dateStr}')"></div>
+                  </td>`;
+                }).join('')}
+                <td>
+                  <button class="btn-ghost" onclick="deleteHabit('${habit.id}')" style="padding:2px 6px; color:var(--danger);">×</button>
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      ` : '<div class="empty" style="padding:2rem; text-align:center;">No tienes hábitos registrados. ¡Crea uno nuevo para empezar!</div>'}
+    </div>
+  `;
+}
+
+async function toggleHabit(habitId, dateStr) {
+  const habit = state.habits.find(h => h.id === habitId);
+  if (!habit) return;
+  
+  if (!habit.history) habit.history = {};
+  
+  // Si ya estaba hecho, lo desmarcamos. Si no, lo marcamos.
+  if (habit.history[dateStr]) {
+    delete habit.history[dateStr];
+  } else {
+    habit.history[dateStr] = true;
+  }
+  
+  await DB.put('habits', habit);
+  render();
+}
+
+function newHabit() {
+  openModal(`
+    <h3>Nuevo Hábito</h3>
+    <form onsubmit="submitHabit(event)">
+      <label>Nombre del Hábito</label>
+      <input type="text" id="habit-name" required autofocus placeholder="Ej: Tomar 2L de agua, Leer 10 páginas...">
+      
+      <label>Icono (Emoji)</label>
+      <input type="text" id="habit-icon" placeholder="Ej: 💧, 📚, 🏋️‍♂️" maxlength="2" style="width: 80px; text-align: center; font-size: 1.5rem;">
+
+      <div style="margin-top:1rem; display:flex; gap:0.5rem; justify-content:flex-end;">
+        <button type="button" class="btn-ghost" onclick="closeModal()">Cancelar</button>
+        <button type="submit" class="primary">Guardar</button>
+      </div>
+    </form>
+  `);
+}
+
+async function submitHabit(e) {
+  e.preventDefault();
+  const habit = {
+    id: uid(),
+    name: document.getElementById('habit-name').value.trim(),
+    icon: document.getElementById('habit-icon').value.trim() || '⭐',
+    history: {}
+  };
+  
+  await DB.put('habits', habit);
+  if (!state.habits) state.habits = [];
+  state.habits.push(habit);
+  
+  closeModal();
+  render();
+}
+
+async function deleteHabit(id) {
+  if (!confirm('¿Eliminar este hábito y todo su historial?')) return;
+  await DB.del('habits', id);
+  state.habits = state.habits.filter(h => h.id !== id);
   render();
 }
 
