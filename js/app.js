@@ -65,6 +65,9 @@ const state = {
   timeFilters: { range: 'today', projectId: '', taskId: '' }
 };
 
+let restTimerInterval = null;
+let restTimeRemaining = 0;
+
 let tempTimerCtx = null; // Variable temporal para el modal de destino
 let searchQuery = '';
 
@@ -1011,8 +1014,14 @@ function viewFocusWorkout() {
       </div>
     </div>
 
-    <!-- CONTENEDOR DE TEMPORIZADOR DE DESCANSO (Lo programaremos en el paso 3.2) -->
-    <div id="rest-timer-container" style="display:none; margin-bottom:1rem;"></div>
+    <!-- CONTENEDOR DE TEMPORIZADOR DE DESCANSO -->
+    <div id="rest-timer-container" style="display:none; margin-bottom:1rem; background:var(--surface-2); border:1px solid var(--info); border-radius:var(--radius-md); padding:0.75rem; justify-content:space-between; align-items:center;">
+      <div style="font-size:1.2rem; color:var(--info); font-weight:bold; text-transform:uppercase; display:flex; align-items:center; gap:0.5rem;">
+        ⏱️ Descanso
+      </div>
+      <div id="rest-timer-display" style="font-size:2rem; font-family:var(--font-display); color:var(--accent); font-weight:bold; text-shadow:var(--glow-yellow);">01:30</div>
+      <button class="btn-ghost" onclick="stopRestTimer()">Saltar</button>
+    </div>
 
     <div style="display:flex; flex-direction:column; gap:1rem;">
       ${session.blocks.map((block, bIdx) => `
@@ -1063,20 +1072,90 @@ function updateWorkoutSet(bIdx, eIdx, sIdx, field, value) {
   // No hacemos render aquí para no perder el foco en el input
 }
 
+function startRestTimer(seconds = 90) {
+  stopRestTimer(); // Limpiamos si había uno corriendo
+  restTimeRemaining = seconds;
+  updateRestTimerUI();
+  
+  const container = document.getElementById('rest-timer-container');
+  if (container) container.style.display = 'flex';
+
+  restTimerInterval = setInterval(() => {
+    restTimeRemaining--;
+    
+    if (restTimeRemaining <= 0) {
+      stopRestTimer();
+      // Pitido usando la API de audio del navegador
+      try {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const oscillator = audioCtx.createOscillator();
+        oscillator.type = 'sine';
+        oscillator.frequency.setValueAtTime(880, audioCtx.currentTime); // La nota La
+        oscillator.connect(audioCtx.destination);
+        oscillator.start();
+        oscillator.stop(audioCtx.currentTime + 0.5); // Medio segundo de duración
+      } catch(e) { console.log('Audio no soportado'); }
+    } else {
+      updateRestTimerUI();
+    }
+  }, 1000);
+}
+
+function stopRestTimer() {
+  clearInterval(restTimerInterval);
+  const container = document.getElementById('rest-timer-container');
+  if (container) container.style.display = 'none';
+}
+
+function updateRestTimerUI() {
+  const display = document.getElementById('rest-timer-display');
+  if (display) {
+    const m = Math.floor(restTimeRemaining / 60).toString().padStart(2, '0');
+    const s = (restTimeRemaining % 60).toString().padStart(2, '0');
+    display.textContent = `${m}:${s}`;
+  }
+}
+
 function toggleWorkoutSet(bIdx, eIdx, sIdx) {
   if (!state.activeWorkout) return;
   const set = state.activeWorkout.blocks[bIdx].exercises[eIdx].sets[sIdx];
   set.done = !set.done;
   
-  // Si se marca como hecho, podríamos iniciar el temporizador de descanso (Paso 3.2)
+  render(); // Refrescamos la pantalla para pintar el cuadradito
   
-  render();
+  // Si se marcó como hecho, arrancamos el descanso (90 segundos por defecto)
+  if (set.done) {
+    startRestTimer(90);
+  }
 }
 
-function finishWorkoutSession() {
+async function finishWorkoutSession() {
   if (!confirm('¿Terminar y guardar el entrenamiento?')) return;
-  // Esta función la programaremos en el Paso 3.2 junto con el guardado en DB
-  alert('El guardado en la base de datos se habilita en el siguiente paso.');
+  
+  const session = state.activeWorkout;
+  const endTime = new Date().toISOString();
+  const duration = Math.floor((new Date(endTime) - new Date(session.startTime)) / 1000);
+
+  const record = {
+    id: uid(),
+    routineId: session.routineId,
+    name: session.name,
+    startTime: session.startTime,
+    endTime: endTime,
+    duration: duration,
+    blocks: session.blocks
+  };
+
+  await DB.put('workout_sessions', record);
+  state.workoutSessions.push(record);
+  
+  // Limpiamos la sesión activa y el timer
+  state.activeWorkout = null;
+  stopRestTimer();
+  
+  state.view = 'workout';
+  render();
+  alert('¡Entrenamiento guardado con éxito, Choom!');
 }
 
 async function toggleHabit(habitId, dateStr) {
