@@ -9,8 +9,8 @@
    SECCIÓN 1 · CONSTANTES Y ESTADO
 ============================================================= */
 const DB_NAME = 'pkm-v0';
-const DB_VERSION = 3; // <-- CAMBIAR A 3
-const DB_STORES = ['projects','tasks','notes','plans','links','sessions','settings', 'events', 'habits']; // <-- AGREGAR 'habits'
+const DB_VERSION = 4; // <-- CAMBIAR A 4
+const DB_STORES = ['projects','tasks','notes','plans','links','sessions','settings', 'events', 'habits', 'exercises', 'workouts']; // <-- Agregar 'exercises', 'workouts'
 
 function newTask(projectId = null) {
   editTaskForm({
@@ -53,7 +53,7 @@ const state = {
   calendarDate: new Date().toISOString().slice(0, 10), // Guarda la fecha en YYYY-MM-DD
   calendarMode: 'month', // 'month' o 'week'
   habitMonth: new Date().toISOString().slice(0, 7), // Guarda "YYYY-MM" del mes que estamos viendo
-  tasks: [], notes: [], projects: [], plans: [], links: [], sessions: [], events: [], habits: [],
+  tasks: [], notes: [], projects: [], plans: [], links: [], sessions: [], events: [], habits: [],  exercises: [], workouts: [],
   settings: {
     workDuration: 25,
     breakDuration: 5,
@@ -254,6 +254,8 @@ async function loadAll() {
   state.sessions = await DB.getAll('sessions');
   state.events   = await DB.getAll('events');
   state.habits   = await DB.getAll('habits'); // <-- AGREGAR
+  state.exercises = await DB.getAll('exercises'); // <-- NUEVO
+  state.workouts  = await DB.getAll('workouts');  // <-- NUEVO
   const s = await DB.get('settings', 'main');
   if (s && s.value) Object.assign(state.settings, s.value);
   state.settings.shortcuts = { ...DEFAULT_SHORTCUTS, ...(state.settings.shortcuts || {}) };
@@ -271,6 +273,22 @@ async function seed() {
   }
   if (!(await DB.get('settings', 'main'))) {
     await DB.put('settings', { id: 'main', value: state.settings });
+  }
+  if (state.exercises.length === 0) {
+    const defaultExercises = [
+      { id: uid(), name: 'Press de Banca', muscle: 'Pecho', equipment: 'Barra', isCustom: false },
+      { id: uid(), name: 'Sentadilla', muscle: 'Piernas', equipment: 'Barra', isCustom: false },
+      { id: uid(), name: 'Peso Muerto', muscle: 'Espalda', equipment: 'Barra', isCustom: false },
+      { id: uid(), name: 'Dominadas', muscle: 'Espalda', equipment: 'Peso corporal', isCustom: false },
+      { id: uid(), name: 'Curl de Bíceps', muscle: 'Bíceps', equipment: 'Mancuernas', isCustom: false },
+      { id: uid(), name: 'Press Militar', muscle: 'Hombros', equipment: 'Barra', isCustom: false },
+      { id: uid(), name: 'Fondos en Paralelas', muscle: 'Pecho', equipment: 'Peso corporal', isCustom: false },
+      { id: uid(), name: 'Remo con Barra', muscle: 'Espalda', equipment: 'Barra', isCustom: false }
+    ];
+    for (const ex of defaultExercises) {
+      await DB.put('exercises', ex);
+      state.exercises.push(ex);
+    }
   }
 }
 
@@ -364,6 +382,7 @@ function render() {
     case 'calendar':  main.innerHTML = viewCalendar();             break;
     case 'today':     main.innerHTML = viewToday();                break;
     case 'habits':    main.innerHTML = viewHabits();               break;
+    case 'workout':   main.innerHTML = viewWorkouts();             break; // <-- NUEVO
     default:          main.innerHTML = '<p>Vista no encontrada.</p>';
   }
   updateTimerDisplays();
@@ -659,6 +678,100 @@ function viewHabits() {
       ` : '<div class="empty" style="padding:2rem; text-align:center;">No tienes hábitos registrados. ¡Crea uno nuevo para empezar!</div>'}
     </div>
   `;
+}
+
+function viewWorkouts() {
+  // Agrupamos ejercicios por músculo principal
+  const grouped = {};
+  state.exercises.forEach(ex => {
+    if (!grouped[ex.muscle]) grouped[ex.muscle] = [];
+    grouped[ex.muscle].push(ex);
+  });
+
+  return `
+    <div class="section-header">
+      <h2>Entrenamiento</h2>
+      <div style="display:flex; gap:0.5rem;">
+        <button class="btn-ghost" onclick="newExercise()">+ Ejercicio</button>
+        <button class="primary" onclick="alert('El modo Focus se habilita en la Fase 3')">▶ Empezar Rutina</button>
+      </div>
+    </div>
+
+    <p style="font-size:12px; color:var(--text-muted); margin-bottom:1rem;">
+      Tu biblioteca de ejercicios. Acá podés agregar movimientos personalizados.
+    </p>
+
+    <div class="grid-auto">
+      ${Object.keys(grouped).sort().map(muscle => `
+        <div class="card">
+          <h3 style="color:var(--accent); border-bottom:1px solid var(--border); padding-bottom:0.5rem; margin-bottom:0.75rem;">${escapeHtml(muscle)}</h3>
+          <div style="display:flex; flex-direction:column; gap:0.4rem;">
+            ${grouped[muscle].map(ex => `
+              <div style="display:flex; justify-content:space-between; align-items:center; font-size:13px; padding:0.4rem; background:var(--surface-2); border-radius:var(--radius-sm);">
+                <span>${escapeHtml(ex.name)} <span style="font-size:10px; color:var(--text-muted);">(${escapeHtml(ex.equipment)})</span></span>
+                ${ex.isCustom ? `<button class="btn-ghost" onclick="deleteExercise('${ex.id}')" style="padding:2px 6px; color:var(--danger);">×</button>` : ''}
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+function newExercise() {
+  openModal(`
+    <h3>Nuevo Ejercicio</h3>
+    <form onsubmit="submitExercise(event)">
+      <label>Nombre del Ejercicio</label>
+      <input type="text" id="ex-name" required autofocus placeholder="Ej: Press Inclinado">
+      
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.5rem;">
+        <div>
+          <label>Músculo Principal</label>
+          <input type="text" id="ex-muscle" required placeholder="Ej: Pecho, Espalda, Piernas" list="muscle-list">
+          <datalist id="muscle-list">
+            <option value="Pecho"><option value="Espalda"><option value="Piernas"><option value="Hombros"><option value="Bíceps"><option value="Tríceps"><option value="Core"><option value="Cardio">
+          </datalist>
+        </div>
+        <div>
+          <label>Equipamiento</label>
+          <input type="text" id="ex-equipment" required placeholder="Ej: Barra, Mancuernas" list="equip-list">
+          <datalist id="equip-list">
+            <option value="Barra"><option value="Mancuernas"><option value="Peso corporal"><option value="Máquina"><option value="Polea"><option value="Banda">
+          </datalist>
+        </div>
+      </div>
+
+      <div style="margin-top:1rem; display:flex; gap:0.5rem; justify-content:flex-end;">
+        <button type="button" class="btn-ghost" onclick="closeModal()">Cancelar</button>
+        <button type="submit" class="primary">Guardar Ejercicio</button>
+      </div>
+    </form>
+  `);
+}
+
+async function submitExercise(e) {
+  e.preventDefault();
+  const ex = {
+    id: uid(),
+    name: document.getElementById('ex-name').value.trim(),
+    muscle: document.getElementById('ex-muscle').value.trim(),
+    equipment: document.getElementById('ex-equipment').value.trim(),
+    isCustom: true
+  };
+  
+  await DB.put('exercises', ex);
+  state.exercises.push(ex);
+  closeModal();
+  render();
+}
+
+async function deleteExercise(id) {
+  if (!confirm('¿Eliminar este ejercicio de tu biblioteca?')) return;
+  await DB.del('exercises', id);
+  state.exercises = state.exercises.filter(e => e.id !== id);
+  render();
 }
 
 async function toggleHabit(habitId, dateStr) {
