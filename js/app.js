@@ -1102,7 +1102,7 @@ function viewWorkoutPerformance() {
             const dateStr = new Date(s.startTime).toLocaleDateString('es-ES', { weekday:'long', day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' });
             
             return `
-              <div class="task-row" style="border-left:3px solid var(--accent); background:var(--surface-2); padding:0.75rem; border-radius:var(--radius-sm); align-items:flex-start; flex-direction:column; gap:0.3rem;">
+              <div class="task-row" style="border-left:3px solid var(--accent); background:var(--surface-2); padding:0.75rem; border-radius:var(--radius-sm); align-items:flex-start; flex-direction:column; gap:0.3rem; cursor:pointer; transition: background 0.2s;" onmouseover="this.style.background='var(--surface-hover)'" onmouseout="this.style.background='var(--surface-2)'" onclick="openWorkoutSessionModal('${s.id}')">
                 <div style="display:flex; justify-content:space-between; width:100%;">
                   <span style="font-weight:bold; color:var(--text); font-size:1.05rem;">${escapeHtml(s.name)}</span>
                   <span style="font-size:12px; color:var(--text-muted); text-transform:capitalize;">${dateStr}</span>
@@ -1119,6 +1119,93 @@ function viewWorkoutPerformance() {
       </div>
     </div>
   `;
+}
+
+function openWorkoutSessionModal(sessionId) {
+  const s = state.workoutSessions.find(x => x.id === sessionId);
+  if (!s) return;
+
+  // Calcular métricas de esta sesión en particular
+  let totalVol = 0;
+  let totalSets = 0;
+  
+  (s.blocks || []).forEach(b => b.exercises.forEach(e => e.sets.forEach(set => {
+    if (set.done) {
+      totalVol += (parseFloat(set.weight) || 0) * (parseFloat(set.reps) || 0);
+      totalSets++;
+    }
+  })));
+
+  const dateStr = new Date(s.startTime).toLocaleString('es-ES', { weekday:'long', day:'numeric', month:'long', year:'numeric', hour:'2-digit', minute:'2-digit' });
+
+  openModal(`
+    <div style="margin-bottom:1rem; border-bottom:1px solid var(--border); padding-bottom:0.75rem;">
+      <h3 style="margin:0; text-transform:uppercase; color:var(--accent);">${escapeHtml(s.name)}</h3>
+      
+      <!-- Fecha en texto normal -->
+      <p style="font-size:12px; color:var(--text-muted); text-transform:capitalize; margin-top:0.2rem; margin-bottom:0.5rem;">
+        ${dateStr}
+      </p>
+      
+      <!-- Métricas como texto debajo de la fecha -->
+      <div style="display:flex; gap:1.5rem; font-size:13px; color:var(--text-soft);">
+        <span>⏱️ <strong>${formatDuration(s.duration)}</strong></span>
+        <span>🏋️ <strong>${totalVol.toLocaleString()} kg</strong></span>
+        <span>📦 <strong>${totalSets} series</strong></span>
+      </div>
+    </div>
+
+    <div style="display:flex; flex-direction:column; gap:1rem; max-height: 60vh; overflow-y:auto; padding-right:0.5rem;">
+      ${(s.blocks || []).map((block, bIdx) => `
+        <div class="builder-block" style="margin-bottom:0; background:var(--surface-2);">
+          <h4 style="margin:0 0 0.5rem 0; color:var(--info); font-size:13px; text-transform:uppercase;">${escapeHtml(block.type)}</h4>
+          
+          ${block.exercises.map(ex => {
+            // Verificamos si el ejercicio tiene series hechas
+            const doneSets = ex.sets.filter(set => set.done);
+            if (doneSets.length === 0) return ''; // Si no hizo ninguna serie, no mostramos el ejercicio
+
+            return `
+              <div style="background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-md); padding:0.75rem; margin-bottom:0.5rem;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+                  <h5 style="margin:0; font-size:0.95rem; color:var(--text);">${escapeHtml(ex.name)}</h5>
+                  <span style="font-size:11px; color:var(--text-muted);">Objetivo: ${ex.targetSets} x ${ex.targetReps}</span>
+                </div>
+                
+                <table style="width:100%; border-collapse:collapse; font-size:12px; text-align:center;">
+                  <thead>
+                    <tr style="border-bottom:1px solid var(--border-soft); color:var(--text-muted); font-size:10px; text-transform:uppercase;">
+                      <th style="padding:0.2rem;">Set</th>
+                      <th style="padding:0.2rem;">Peso (kg)</th>
+                      <th style="padding:0.2rem;">Reps</th>
+                      <th style="padding:0.2rem;">RIR</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${ex.sets.map((set, sIdx) => {
+                      if (!set.done) return ''; // Solo mostramos las series que se completaron
+                      return `
+                        <tr style="border-bottom:1px solid var(--border-soft);">
+                          <td style="padding:0.3rem; color:var(--text-muted);">${sIdx + 1}</td>
+                          <td style="padding:0.3rem; color:var(--accent); font-weight:bold;">${set.weight || '-'}</td>
+                          <td style="padding:0.3rem; color:var(--text);">${set.reps || '-'}</td>
+                          <td style="padding:0.3rem; color:var(--warning);">${set.rir || '-'}</td>
+                        </tr>
+                      `;
+                    }).join('')}
+                  </tbody>
+                </table>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      `).join('')}
+    </div>
+
+    <div style="margin-top:1.5rem; text-align:right; border-top:1px solid var(--border); padding-top:1rem;">
+      <button class="btn-ghost" onclick="closeModal()">Cerrar</button>
+    </div>
+  `);
 }
 
 function startWorkoutSession(routineId) {
