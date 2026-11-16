@@ -39,6 +39,7 @@ const state = {
   viewParam: null,
   projectTab: 'tasks',
   planTab: 'academic',
+  perfPlanId: '',
   tasks: [], notes: [], projects: [], plans: [], links: [], sessions: [],
   settings: {
     workDuration: 25,
@@ -339,6 +340,7 @@ function render() {
       if (headerActions) headerActions.innerHTML = `<button onclick="newPlan()">+ Plan</button>`;
       break;
     case 'plan':      main.innerHTML = viewPlanDetail(state.viewParam); break;
+    case 'performance': main.innerHTML = viewPerformance(); break;
     case 'pomodoro':  main.innerHTML = viewPomodoro();             break;
     case 'timeusage': main.innerHTML = viewTimeUsage();            break;
     case 'tags':      main.innerHTML = viewTags();                 break;
@@ -684,9 +686,17 @@ function viewPlans() {
   `;
 }
 
+function getPlanPeriods(plan) {
+  if (plan.periods && plan.periods.length > 0) return plan.periods;
+  if (plan.subjects && plan.subjects.length > 0) return [{ id: 'legacy', name: 'Periodo General', subjects: plan.subjects }];
+  return [];
+}
+
 function viewPlanDetail(id) {
   const p = state.plans.find(x => x.id === id);
   if (!p) return '<p>Plan no encontrado.</p>';
+  const periods = getPlanPeriods(p);
+
   return `
     <div class="section-header">
       <div style="display:flex; gap:0.75rem; align-items:center;">
@@ -703,60 +713,225 @@ function viewPlanDetail(id) {
       </div>
     </div>
     
-    ${(p.subjects || []).map(sub => `
-      <div class="card" style="margin-bottom:0.75rem;">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
-          <h3 style="margin:0;">${escapeHtml(sub.name)}</h3>
-          ${(p.type || 'academic') === 'academic' ? `<button class="btn-ghost" onclick="newExam('${p.id}', '${sub.id}')">+ Examen</button>` : ''}
-        </div>
+    ${periods.map(period => `
+      <div style="margin-bottom: 2rem;">
+        <h3 style="color: var(--accent); border-bottom: 2px solid var(--border-strong); padding-bottom: 0.5rem; margin-bottom: 1rem; text-transform: uppercase;">
+          ${escapeHtml(period.name || 'Sin Nombre')}
+        </h3>
         
-        <!-- Lista de Exámenes -->
-        ${(sub.exams && sub.exams.length) ? `
-          <div style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-bottom:1rem;">
-            ${sub.exams.map(ex => {
-              const today = new Date(); today.setHours(0,0,0,0);
-              const exDate = new Date(ex.date + 'T00:00:00');
-              const diffTime = exDate - today;
-              const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-              
-              let color = 'var(--text)';
-              let bg = 'var(--surface-2)';
-              let border = '1px solid var(--border)';
-              let daysText = '';
+        ${(period.subjects || []).map(sub => `
+          <div class="card" style="margin-bottom:0.75rem;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+              <h4 style="margin:0; font-size: 1.1rem;">${escapeHtml(sub.name)}</h4>
+              ${(p.type || 'academic') === 'academic' ? `<button class="btn-ghost" onclick="newExam('${p.id}', '${sub.id}')">+ Examen</button>` : ''}
+            </div>
+            
+            <!-- Lista de Exámenes -->
+            ${(sub.exams && sub.exams.length) ? `
+              <div style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-bottom:1rem;">
+                ${sub.exams.map(ex => {
+                  const today = new Date(); today.setHours(0,0,0,0);
+                  const exDate = new Date(ex.date + 'T00:00:00');
+                  const diffTime = exDate - today;
+                  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                  
+                  let color = 'var(--text)';
+                  let bg = 'var(--surface-2)';
+                  let border = '1px solid var(--border)';
+                  let daysText = '';
 
-              if (diffDays >= 0 && diffDays <= 7) {
-                bg = 'rgba(255, 176, 0, 0.15)'; border = '1px solid var(--warning)'; color = 'var(--warning)';
-                daysText = ` (Faltan ${diffDays} días)`;
-              } else if (diffDays < 0) {
-                bg = 'rgba(255, 0, 60, 0.15)'; border = '1px solid var(--danger)'; color = 'var(--danger)';
-                daysText = ` (Vencido)`;
-              }
+                  if (diffDays >= 0 && diffDays <= 7) {
+                    bg = 'rgba(255, 176, 0, 0.15)'; border = '1px solid var(--warning)'; color = 'var(--warning)';
+                    daysText = ` (Faltan ${diffDays} días)`;
+                  } else if (diffDays < 0) {
+                    bg = 'rgba(255, 0, 60, 0.15)'; border = '1px solid var(--danger)'; color = 'var(--danger)';
+                    daysText = ` (Vencido)`;
+                  }
 
-              return `<div style="background:${bg}; border:${border}; color:${color}; border-radius:var(--radius-sm); padding:4px 8px; font-size:12px; cursor:pointer; display:flex; gap:0.5rem; align-items:center;" onclick="editExam('${p.id}','${sub.id}','${ex.id}')">
-                <span style="font-weight:bold;">${escapeHtml(ex.name)}</span>
-                <span style="text-transform:capitalize; opacity:0.8;">${escapeHtml(ex.type)}</span>
-                <span>${ex.date}${daysText}</span>
+                  return `<div style="background:${bg}; border:${border}; color:${color}; border-radius:var(--radius-sm); padding:4px 8px; font-size:12px; cursor:pointer; display:flex; gap:0.5rem; align-items:center;" onclick="editExam('${p.id}','${sub.id}','${ex.id}')">
+                    <span style="font-weight:bold;">${escapeHtml(ex.name)}</span>
+                    <span style="text-transform:capitalize; opacity:0.8;">${escapeHtml(ex.type)}</span>
+                    <span>${ex.date}${daysText}</span>
+                  </div>`;
+                }).join('')}
+              </div>
+            ` : ''}
+
+            <!-- Lista de Temas -->
+            ${(sub.topics || []).map(t => {
+              const isDue = t.done && t.nextReview && t.nextReview <= todayStr();
+              return `<div class="task-row">
+                <input type="checkbox" ${t.done ? 'checked' : ''} onchange="toggleTopic('${p.id}','${sub.id}','${t.id}')" onclick="event.stopPropagation()">
+                <span class="title" onclick="editTopic('${p.id}','${sub.id}','${t.id}')" style="${t.done ? 'text-decoration:line-through; opacity:0.55;' : ''}">
+                  ${escapeHtml(t.name)}
+                </span>
+                ${isDue ? `<span class="tag" style="background:rgba(255,176,0,0.15); border-color:var(--warning); color:var(--warning); margin-left:auto;">⚠️ Repasar</span>` : ''}
+                ${(t.links && t.links.length) ? `<span class="tag" style="font-size:10px; color:var(--info); ${isDue ? '' : 'margin-left:auto;'}">🔗 ${t.links.length}</span>` : ''}
+                ${!t.done ? `<button class="btn-play" onclick="event.stopPropagation(); startTopicSession('${p.id}','${sub.id}','${t.id}')" title="Estudiar este tema">▶</button>` : ''}
               </div>`;
-            }).join('')}
+            }).join('') || '<div class="empty">Sin temas.</div>'}
           </div>
-        ` : ''}
-
-        <!-- Lista de Temas -->
-        ${(sub.topics || []).map(t => {
-          const isDue = t.done && t.nextReview && t.nextReview <= todayStr();
-          return `<div class="task-row">
-            <input type="checkbox" ${t.done ? 'checked' : ''} onchange="toggleTopic('${p.id}','${sub.id}','${t.id}')" onclick="event.stopPropagation()">
-            <span class="title" onclick="editTopic('${p.id}','${sub.id}','${t.id}')" style="${t.done ? 'text-decoration:line-through; opacity:0.55;' : ''}">
-              ${escapeHtml(t.name)}
-            </span>
-            ${isDue ? `<span class="tag" style="background:rgba(255,176,0,0.15); border-color:var(--warning); color:var(--warning); margin-left:auto;">⚠️ Repasar</span>` : ''}
-            ${(t.links && t.links.length) ? `<span class="tag" style="font-size:10px; color:var(--info); ${isDue ? '' : 'margin-left:auto;'}">🔗 ${t.links.length}</span>` : ''}
-            ${!t.done ? `<button class="btn-play" onclick="event.stopPropagation(); startTopicSession('${p.id}','${sub.id}','${t.id}')" title="Estudiar este tema">▶</button>` : ''}
-          </div>`;
-        }).join('') || '<div class="empty">Sin temas.</div>'}
+        `).join('') || '<div class="empty">Sin materias en este periodo.</div>'}
       </div>
-    `).join('') || '<div class="empty">Sin materias.</div>'}
+    `).join('') || '<div class="empty">Sin periodos ni materias.</div>'}
   `;
+}
+
+// Pega esto justo después de terminar la función viewPlanDetail(id)
+
+function viewPerformance() {
+  const academicPlans = state.plans.filter(p => (p.type || 'academic') === 'academic');
+  
+  if (academicPlans.length === 0) {
+    return `<h2>Rendimiento Escolar</h2><div class="empty">No hay planes académicos creados.</div>`;
+  }
+
+  if (!state.perfPlanId || !academicPlans.find(p => p.id === state.perfPlanId)) {
+    state.perfPlanId = academicPlans[0].id;
+  }
+
+  const currentPlan = academicPlans.find(p => p.id === state.perfPlanId);
+  const periods = getPlanPeriods(currentPlan);
+
+  let globalSum = 0;
+  let globalCount = 0;
+
+  return `
+    <div class="section-header">
+      <h2>Rendimiento Escolar</h2>
+    </div>
+    
+    <div class="card" style="margin-bottom:1rem;">
+      <label>Seleccionar Plan Académico</label>
+      <select onchange="state.perfPlanId=this.value; render();">
+        ${academicPlans.map(p => `<option value="${p.id}" ${p.id === state.perfPlanId ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('')}
+      </select>
+    </div>
+
+    ${periods.map(period => {
+      // Cálculos del periodo
+      let periodSum = 0;
+      let periodCount = 0;
+      
+      (period.subjects || []).forEach(sub => {
+        const validGrades = (sub.exams || []).map(e => parseFloat(e.grade)).filter(g => !isNaN(g));
+        if (validGrades.length) {
+          const avg = validGrades.reduce((a, b) => a + b, 0) / validGrades.length;
+          periodSum += avg;
+          periodCount++;
+          
+          globalSum += avg;
+          globalCount++;
+        }
+      });
+
+      const periodAvg = periodCount ? (periodSum / periodCount).toFixed(2) : '-';
+
+      return `
+        <div style="margin-bottom: 2rem;">
+          <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid var(--border-strong); padding-bottom: 0.5rem; margin-bottom: 1rem;">
+            <h3 style="color: var(--accent); margin:0; text-transform: uppercase;">${escapeHtml(period.name || 'Sin Nombre')}</h3>
+            <div style="font-size:1.2rem; font-weight:bold; color:var(--text);">Promedio Periodo: <span style="color:var(--warning); text-shadow:0 0 8px rgba(255,176,0,0.4);">${periodAvg}</span></div>
+          </div>
+
+          ${(period.subjects || []).map(sub => {
+            const subExams = sub.exams || [];
+            const validGrades = subExams.map(e => parseFloat(e.grade)).filter(g => !isNaN(g));
+            const subAvg = validGrades.length ? (validGrades.reduce((a, b) => a + b, 0) / validGrades.length).toFixed(2) : '-';
+            const subStudyTime = (sub.topics || []).reduce((acc, t) => acc + (t.studyTime || 0), 0);
+
+            return `
+              <div class="card" style="margin-bottom:1rem;">
+                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--border); padding-bottom:0.5rem; margin-bottom:1rem;">
+                  <h4 style="margin:0; font-size: 1.1rem;">${escapeHtml(sub.name)}</h4>
+                  <div style="display:flex; gap:1rem; text-align:right;">
+                    <div>
+                      <div style="font-size:10px; color:var(--text-muted); text-transform:uppercase;">Tiempo Estudio</div>
+                      <div style="font-weight:bold; color:var(--info);">${formatDuration(subStudyTime)}</div>
+                    </div>
+                    <div>
+                      <div style="font-size:10px; color:var(--text-muted); text-transform:uppercase;">Promedio Materia</div>
+                      <div style="font-weight:bold; color:var(--accent); font-size:1.2rem; text-shadow:var(--glow-yellow);">${subAvg}</div>
+                    </div>
+                  </div>
+                </div>
+
+                ${subExams.length ? `
+                  <table style="width:100%; border-collapse:collapse; font-size:13px; text-align:left;">
+                    <thead>
+                      <tr style="border-bottom:1px solid var(--border-strong); color:var(--text-muted); font-size:11px; text-transform:uppercase;">
+                        <th style="padding:0.5rem;">Examen</th>
+                        <th style="padding:0.5rem;">Tipo</th>
+                        <th style="padding:0.5rem;">Fecha</th>
+                        <th style="padding:0.5rem; width:100px;">Calificación</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${subExams.map(ex => `
+                        <tr style="border-bottom:1px solid var(--border);">
+                          <td style="padding:0.5rem;">${escapeHtml(ex.name)}</td>
+                          <td style="padding:0.5rem; text-transform:capitalize; color:var(--text-soft);">${escapeHtml(ex.type)}</td>
+                          <td style="padding:0.5rem; color:var(--text-soft);">${ex.date}</td>
+                          <td style="padding:0.5rem;">
+                            <input type="number" step="0.1" min="0" max="10" 
+                              value="${ex.grade || ''}" 
+                              placeholder="-"
+                              style="width:70px; margin:0; padding:0.2rem 0.5rem; text-align:center; font-weight:bold; color:var(--accent);"
+                              onchange="updateExamGrade('${currentPlan.id}', '${sub.id}', '${ex.id}', this.value)"
+                            >
+                          </td>
+                        </tr>
+                      `).join('')}
+                    </tbody>
+                  </table>
+                ` : '<div class="empty" style="font-size:12px; padding: 0.5rem 0;">No hay exámenes registrados.</div>'}
+
+                <div style="margin-top:1rem;">
+                  <p style="font-size:11px; color:var(--text-muted); margin-bottom:0.5rem; text-transform:uppercase;">Métricas de Tiempo por Tema</p>
+                  <div style="display:flex; flex-wrap:wrap; gap:0.5rem;">
+                    ${(sub.topics || []).map(t => `
+                      <span class="tag" style="background:var(--surface-input); border:1px solid var(--border); color:var(--text-soft);">
+                        ${escapeHtml(t.name)}: <span style="color:var(--info);">${formatDuration(t.studyTime || 0)}</span>
+                      </span>
+                    `).join('') || '<span class="empty">Sin temas.</span>'}
+                  </div>
+                </div>
+              </div>
+            `;
+          }).join('') || '<div class="empty">Sin materias en este periodo.</div>'}
+        </div>
+      `;
+    }).join('')}
+
+    <div class="card primary" style="margin-top:2rem; display:flex; justify-content:space-between; align-items:center; background:var(--surface-2); border:1px solid var(--accent);">
+      <h3 style="margin:0; color:var(--text);">Promedio General del Plan</h3>
+      <div style="font-family:var(--font-display); font-size:2rem; font-weight:bold; color:var(--accent); text-shadow:var(--glow-yellow);">
+        ${globalCount ? (globalSum / globalCount).toFixed(2) : '-'}
+      </div>
+    </div>
+  `;
+}
+
+async function updateExamGrade(planId, subjId, examId, value) {
+  const p = state.plans.find(x => x.id === planId);
+  if (!p) return;
+  
+  let sub = null;
+  const periods = getPlanPeriods(p);
+  for (const per of periods) {
+    sub = (per.subjects || []).find(s => s.id === subjId);
+    if (sub) break;
+  }
+  
+  if (!sub) return;
+  const ex = sub.exams.find(e => e.id === examId);
+  if (!ex) return;
+  
+  const val = parseFloat(value);
+  ex.grade = isNaN(val) ? null : val;
+  
+  await savePlan(p);
+  render(); 
 }
 
 function addTopicLinkRow(title = '', url = '') {
@@ -852,7 +1027,7 @@ async function submitExam(e, planId, subjectId, examId) {
     const ex = sub.exams.find(x => x.id === examId);
     ex.name = name; ex.date = date; ex.type = type;
   } else {
-    sub.exams.push({ id: uid(), name, date, type });
+    sub.exams.push({ id: uid(), name, date, type, grade: null });
   }
   
   await savePlan(p);
@@ -1633,11 +1808,22 @@ function editPlan(id) {
   if (!p) return;
   editPlanForm({ ...p, isNew: false });
 }
+
 function editPlanForm(plan) {
+  // Adaptación por si es un plan viejo (sin periodos) o uno nuevo
+  let periods = plan.periods;
+  if (!periods) {
+    periods = [];
+    if (plan.subjects && plan.subjects.length > 0) {
+      periods.push({ id: uid(), name: 'Periodo General', subjects: plan.subjects });
+    }
+  }
+  if (periods.length === 0) periods.push({ id: uid(), name: 'Periodo 1', subjects: [] });
+
   openModal(`
     <h3>${plan.isNew ? 'Nuevo plan' : 'Editar plan'}</h3>
     <form onsubmit="submitPlan(event, '${plan.id}')">
-      <label>Nombre</label>
+      <label>Nombre del Plan</label>
       <input type="text" id="plan-name" value="${escapeHtml(plan.name || '')}" required autofocus>
       
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.5rem;">
@@ -1656,73 +1842,134 @@ function editPlanForm(plan) {
       
       ${imageFieldHTML('plan-image', plan.image || '')}
       
-      <label>Materias / Secciones</label>
-      <div id="subject-list"></div>
-      <button type="button" onclick="addSubjectRow()" style="margin-bottom:0.5rem;">+ Materia/Sección</button>
+      <label>Periodos y Materias</label>
+      <div id="period-list"></div>
+      <button type="button" onclick="addPeriodRow()" style="margin-bottom:1rem; font-size:12px;">+ Agregar Periodo</button>
       
       <div style="margin-top:0.5rem; display:flex; gap:0.5rem; justify-content:flex-end;">
         ${!plan.isNew ? `<button type="button" class="btn-danger" onclick="deletePlan('${plan.id}')" style="margin-right:auto;">Eliminar</button>` : ''}
         <button type="button" class="btn-ghost" onclick="closeModal()">Cancelar</button>
-        <button type="submit" class="primary">Guardar</button>
+        <button type="submit" class="primary">Guardar Plan</button>
       </div>
     </form>
   `);
-  (plan.subjects || []).forEach(s => addSubjectRow(s.name, (s.topics || []).map(t => t.name).join('\n')));
-  if (!(plan.subjects || []).length) addSubjectRow();
+  
+  // Renderizamos los periodos existentes en el formulario
+  periods.forEach(p => addPeriodRow(p));
 }
 
-function addSubjectRow(name = '', topicsText = '') {
-  const list = document.getElementById('subject-list');
+function addPeriodRow(periodData = null) {
+  const list = document.getElementById('period-list');
   if (!list) return;
+  
+  const pData = periodData || { id: uid(), name: '', subjects: [] };
+  
   const div = document.createElement('div');
-  div.style.cssText = 'border:1px solid #ddd; padding:0.5rem; margin-bottom:0.5rem; border-radius:4px;';
+  div.className = 'period-block';
+  div.dataset.id = pData.id;
+  div.style.cssText = 'border:1px solid var(--border-strong); padding:0.75rem; margin-bottom:1rem; border-radius:var(--radius-md); background:var(--surface-2);';
+  
+  div.innerHTML = `
+    <div style="display:flex; gap:0.5rem; margin-bottom:0.75rem; align-items:center;">
+      <input type="text" class="period-name" placeholder="Ej: 1er Cuatrimestre, Trimestre 1..." value="${escapeHtml(pData.name)}" style="flex:1; margin:0; font-weight:bold; color:var(--accent);">
+      <button type="button" class="btn-danger" onclick="this.parentElement.parentElement.remove()" style="padding:2px 6px;" title="Eliminar Periodo">×</button>
+    </div>
+    <div class="subject-list" style="padding-left:1rem; border-left:2px solid var(--border);"></div>
+    <button type="button" onclick="addSubjectRow(this.parentElement.querySelector('.subject-list'))" style="margin-top:0.5rem; font-size:11px;">+ Agregar Materia</button>
+  `;
+  
+  list.appendChild(div);
+  
+  const subList = div.querySelector('.subject-list');
+  if (pData.subjects && pData.subjects.length) {
+    pData.subjects.forEach(s => addSubjectRow(subList, s));
+  } else {
+    addSubjectRow(subList); // Una materia vacía por defecto
+  }
+}
+
+function addSubjectRow(container, subData = null) {
+  if (!container) return;
+  
+  const sData = subData || { name: '', topics: [] };
+  const topicNames = (sData.topics || []).map(t => t.name).join('\n');
+  
+  const div = document.createElement('div');
+  div.style.cssText = 'border:1px solid var(--border); padding:0.5rem; margin-bottom:0.5rem; border-radius:var(--radius-sm); background:var(--surface);';
   div.innerHTML = `
     <div style="display:flex; gap:0.3rem; margin-bottom:0.3rem; align-items:center;">
-      <input type="text" class="subject-name" placeholder="Nombre de la materia" value="${escapeHtml(name)}" style="flex:1; margin:0;">
-      <button type="button" onclick="this.parentElement.parentElement.remove()">×</button>
+      <input type="text" class="subject-name" placeholder="Nombre de la materia" value="${escapeHtml(sData.name)}" style="flex:1; margin:0;">
+      <button type="button" onclick="this.parentElement.parentElement.remove()" class="btn-ghost" style="padding:2px 6px;">×</button>
     </div>
-    <textarea class="subject-topics" placeholder="Temas (uno por línea)" style="margin:0; min-height:60px;">${escapeHtml(topicsText)}</textarea>
+    <textarea class="subject-topics" placeholder="Temas (uno por línea)" style="margin:0; min-height:60px; font-size:12px;">${escapeHtml(topicNames)}</textarea>
   `;
-  list.appendChild(div);
+  container.appendChild(div);
 }
 
 async function submitPlan(e, id) {
   e.preventDefault();
   const existing = state.plans.find(x => x.id === id);
   
-  const subjects = [...document.querySelectorAll('#subject-list > div')].map(div => {
-    const name = div.querySelector('.subject-name').value.trim();
-    const topicsText = div.querySelector('.subject-topics').value;
-    const topicNames = topicsText.split('\n').map(s => s.trim()).filter(Boolean);
-    const existingSub = existing && (existing.subjects || []).find(s => s.name === name);
+  // Buscamos los periodos viejos para conservar exámenes y temas
+  let oldPeriods = existing ? (existing.periods || []) : [];
+  if (!oldPeriods.length && existing && existing.subjects) {
+    oldPeriods = [{ id: 'legacy', subjects: existing.subjects }];
+  }
+
+  const periodBlocks = document.querySelectorAll('.period-block');
+  const periods = [...periodBlocks].map(pBlock => {
+    const periodName = pBlock.querySelector('.period-name').value.trim();
+    const periodId = pBlock.dataset.id;
+    
+    const subBlocks = pBlock.querySelectorAll('.subject-list > div');
+    const subjects = [...subBlocks].map(subDiv => {
+      const name = subDiv.querySelector('.subject-name').value.trim();
+      const topicsText = subDiv.querySelector('.subject-topics').value;
+      const topicNames = topicsText.split('\n').map(s => s.trim()).filter(Boolean);
+      
+      // Conservar exámenes y temas viejos
+      const oldPeriod = oldPeriods.find(p => p.id === periodId) || oldPeriods.find(p => p.id === 'legacy');
+      const existingSub = oldPeriod ? (oldPeriod.subjects || []).find(s => s.name === name) : null;
+      
+      return {
+        id: existingSub ? existingSub.id : uid(),
+        name,
+        exams: existingSub ? (existingSub.exams || []) : [],
+        topics: topicNames.map(tn => {
+          const et = existingSub && (existingSub.topics || []).find(t => t.name === tn);
+          return { 
+            id: et ? et.id : uid(), 
+            name: tn, 
+            done: et ? et.done : false,
+            content: et ? (et.content || '') : '',
+            links: et ? (et.links || []) : [],
+            studyTime: et ? (et.studyTime || 0) : 0,
+            interval: et ? (et.interval || 0) : 0,
+            nextReview: et ? (et.nextReview || null) : null
+          };
+        })
+      };
+    }).filter(s => s.name); // Solo guardamos materias con nombre
     
     return {
-      id: existingSub ? existingSub.id : uid(),
-      name,
-      exams: existingSub ? (existingSub.exams || []) : [], // Conserva exámenes
-            topics: topicNames.map(tn => {
-        const et = existingSub && (existingSub.topics || []).find(t => t.name === tn);
-        return { 
-          id: et ? et.id : uid(), 
-          name: tn, 
-          done: et ? et.done : false,
-          content: et ? (et.content || '') : '',
-          links: et ? (et.links || []) : [],
-          studyTime: et ? (et.studyTime || 0) : 0,
-          interval: et ? (et.interval || 0) : 0,         // <-- NUEVO
-          nextReview: et ? (et.nextReview || null) : null // <-- NUEVO
-        };
-      })
-    }; // Cerramos el objeto de la materia
-  }).filter(s => s.name); // Cerramos el map de materias y filtramos
-  
+      id: periodId,
+      name: periodName,
+      subjects: subjects
+    };
+  }).filter(p => p.name); // Solo guardamos periodos con nombre
+
+  // Mantenemos "subjects" a nivel raíz temporalmente para que no crashee el resto de la app, 
+  // pero la fuente de verdad ahora será "periods".
+  const allSubjects = periods.reduce((acc, p) => acc.concat(p.subjects), []);
+
   const plan = {
     id,
     name: document.getElementById('plan-name').value.trim(),
     type: document.getElementById('plan-type').value,
     description: document.getElementById('plan-desc').value.trim(),
     image: document.getElementById('plan-image').value || '',
-    subjects,
+    periods: periods, 
+    subjects: allSubjects, // <-- Parche temporal para que las vistas de exámenes no se rompan
     createdAt: existing ? existing.createdAt : new Date().toISOString()
   };
   
