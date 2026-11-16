@@ -9,8 +9,8 @@
    SECCIÓN 1 · CONSTANTES Y ESTADO
 ============================================================= */
 const DB_NAME = 'pkm-v0';
-const DB_VERSION = 5; // <-- CAMBIAR A 5
-const DB_STORES = ['projects','tasks','notes','plans','links','sessions','settings', 'events', 'habits', 'exercises', 'workouts', 'workout_sessions']; // <-- AGREGAR 'workout_sessions'
+const DB_VERSION = 5; // <-- Asegurate de que sea 5
+const DB_STORES = ['projects','tasks','notes','plans','links','sessions','settings', 'events', 'habits', 'exercises', 'workouts', 'workout_sessions']; 
 
 function newTask(projectId = null) {
   editTaskForm({
@@ -49,13 +49,12 @@ const state = {
   viewParam: null,
   projectTab: 'tasks',
   planTab: 'academic',
-  workoutTab: 'routines',
   perfPlanId: '',
-  activeWorkout: null,
-  calendarDate: new Date().toISOString().slice(0, 10), // Guarda la fecha en YYYY-MM-DD
-  calendarMode: 'month', // 'month' o 'week'
-  habitMonth: new Date().toISOString().slice(0, 7), // Guarda "YYYY-MM" del mes que estamos viendo
-  tasks: [], notes: [], projects: [], plans: [], links: [], sessions: [], events: [], habits: [],  exercises: [], workouts: [], workoutSessions: [],
+  calendarDate: new Date().toISOString().slice(0, 10), // <-- Clave para Calendario
+  calendarMode: 'month',                              // <-- Clave para Calendario
+  habitMonth: new Date().toISOString().slice(0, 7),   // <-- Clave para Hábitos
+  workoutTab: 'routines',                             // <-- Clave para Entrenamiento
+  tasks: [], notes: [], projects: [], plans: [], links: [], sessions: [], events: [], habits: [], exercises: [], workouts: [], workoutSessions: [], activeWorkout: null,
   settings: {
     workDuration: 25,
     breakDuration: 5,
@@ -253,18 +252,18 @@ const deleteItem = async (store, id, arr) => { await DB.del(store, id); const i 
 ============================================================= */
 async function loadAll() {
   await DB.open();
-  state.tasks    = await DB.getAll('tasks');
-  state.notes    = await DB.getAll('notes');
-  state.projects = await DB.getAll('projects');
-  state.plans    = await DB.getAll('plans');
-  state.links    = await DB.getAll('links');
-  state.sessions = await DB.getAll('sessions');
-  state.events   = await DB.getAll('events');
-  state.habits   = await DB.getAll('habits'); // <-- AGREGAR
-  state.exercises = await DB.getAll('exercises'); // <-- NUEVO
-  state.workouts  = await DB.getAll('workouts');  // <-- NUEVO
-    state.workouts        = await DB.getAll('workouts');
-  state.workoutSessions = await DB.getAll('workout_sessions'); // <-- NUEVO
+  state.tasks           = await DB.getAll('tasks');
+  state.notes           = await DB.getAll('notes');
+  state.projects        = await DB.getAll('projects');
+  state.plans           = await DB.getAll('plans');
+  state.links           = await DB.getAll('links');
+  state.sessions        = await DB.getAll('sessions');
+  state.events          = await DB.getAll('events');
+  state.habits          = await DB.getAll('habits');
+  state.exercises       = await DB.getAll('exercises');
+  state.workouts        = await DB.getAll('workouts');
+  state.workoutSessions = await DB.getAll('workout_sessions');
+  
   const s = await DB.get('settings', 'main');
   if (s && s.value) Object.assign(state.settings, s.value);
   state.settings.shortcuts = { ...DEFAULT_SHORTCUTS, ...(state.settings.shortcuts || {}) };
@@ -355,47 +354,97 @@ function render() {
     }
   });
 
-  // Limpiamos los botones contextuales de la cabecera
-  const headerActions = document.getElementById('header-view-actions');
-  if (headerActions) headerActions.innerHTML = '';
-
+  const mainHeader = document.getElementById('main-header');
+  const headerGlobal = document.getElementById('global-header-actions');
   const main = $('#main-content');
+  
+  // Ocultamos la cabecera global por defecto
+  if (mainHeader) mainHeader.style.display = 'none';
+  if (headerGlobal) headerGlobal.style.display = 'none';
+
+  // Vistas que SÍ tienen la barra de búsqueda global (Panel, Tareas, Notas, etc.)
+  const globalViews = ['panel', 'today', 'inbox', 'projects', 'project', 'tasks', 'notes', 'search'];
+  if (globalViews.includes(state.view)) {
+    if (mainHeader) mainHeader.style.display = 'flex';
+    if (headerGlobal) headerGlobal.style.display = 'flex';
+  }
+
+  let actionButtonHTML = '';
+
   switch (state.view) {
     case 'panel':     main.innerHTML = viewPanel();                break;
     case 'today':     main.innerHTML = viewToday();                break;
-    case 'inbox':     
-      main.innerHTML = viewInbox();                
-      break;
+    case 'inbox':     main.innerHTML = viewInbox();                break;
     case 'projects':  
       main.innerHTML = viewProjects();             
-      if (headerActions) headerActions.innerHTML = `<button onclick="newProject()">+ Proyecto</button>`;
+      actionButtonHTML = `<button onclick="newProject()">+ Proyecto</button>`;
       break;
     case 'project':   main.innerHTML = viewProjectDetail(state.viewParam); break;
-    case 'tasks':     
-      main.innerHTML = viewTasks();                
-      break;
-    case 'notes':     
-      main.innerHTML = viewNotes();                
-      break;
+    case 'tasks':     main.innerHTML = viewTasks();                break;
+    case 'notes':     main.innerHTML = viewNotes();                break;
     case 'plans':     
       main.innerHTML = viewPlans();                
-      if (headerActions) headerActions.innerHTML = `<button onclick="newPlan()">+ Plan</button>`;
+      actionButtonHTML = `<button onclick="newPlan()">+ Plan</button>`;
       break;
     case 'plan':      main.innerHTML = viewPlanDetail(state.viewParam); break;
-    case 'performance': main.innerHTML = viewPerformance(); break;
+    case 'performance': main.innerHTML = viewPerformance();        break;
+    case 'calendar':  
+      main.innerHTML = viewCalendar();               
+      actionButtonHTML = `<button class="primary" onclick="newEvent()">+ Evento</button>`;
+      break;
+    case 'habits':    
+      main.innerHTML = viewHabits();                 
+      actionButtonHTML = `<button class="primary" onclick="newHabit()">+ Nuevo Hábito</button>`;
+      break;
+    case 'workout':   
+      main.innerHTML = viewWorkouts();               
+      if (state.workoutTab === 'library') {
+        actionButtonHTML = `<button class="btn-ghost" onclick="newExercise()">+ Ejercicio</button>`;
+      } else {
+        actionButtonHTML = `<button class="primary" onclick="newWorkout()">+ Nueva Rutina</button>`;
+      }
+      break;
+    case 'workout_performance': main.innerHTML = viewWorkoutPerformance(); break;
+    case 'workout_focus': 
+      main.innerHTML = viewFocusWorkout();           
+      break; // El modo focus no tiene cabecera y no necesita botón extra
     case 'pomodoro':  main.innerHTML = viewPomodoro();             break;
     case 'timeusage': main.innerHTML = viewTimeUsage();            break;
     case 'tags':      main.innerHTML = viewTags();                 break;
     case 'settings':  main.innerHTML = viewSettings();             break;
     case 'search':    main.innerHTML = viewSearch();               break;
-    case 'calendar':  main.innerHTML = viewCalendar();             break;
-    case 'today':     main.innerHTML = viewToday();                break;
-    case 'habits':    main.innerHTML = viewHabits();               break;
-    case 'workout':   main.innerHTML = viewWorkouts();             break; // <-- NUEVO
-    case 'workout_performance': main.innerHTML = viewWorkoutPerformance(); break;
-    case 'workout_focus': main.innerHTML = viewFocusWorkout();     break;
     default:          main.innerHTML = '<p>Vista no encontrada.</p>';
   }
+
+  // --- LA MAGIA: Inyectar el botón al lado del título <h2> ---
+  if (actionButtonHTML) {
+    const titleEl = main.querySelector('h2');
+    if (titleEl) {
+      // Buscamos si el título ya está dentro de un contenedor .section-header
+      const headerContainer = titleEl.closest('.section-header');
+      
+      if (headerContainer) {
+        // Si ya existe el contenedor, le pegamos el botón adentro
+        headerContainer.innerHTML += actionButtonHTML;
+      } else {
+        // Si el título está suelto, creamos un contenedor flex para alinearlos
+        const parent = titleEl.parentNode;
+        const wrapper = document.createElement('div');
+        wrapper.className = 'section-header';
+        wrapper.style.display = 'flex';
+        wrapper.style.justifyContent = 'space-between';
+        wrapper.style.alignItems = 'center';
+        wrapper.style.marginBottom = '1rem';
+        
+        parent.insertBefore(wrapper, titleEl);
+        wrapper.appendChild(titleEl);
+        titleEl.style.marginBottom = '0';
+        
+        wrapper.insertAdjacentHTML('beforeend', actionButtonHTML);
+      }
+    }
+  }
+
   updateTimerDisplays();
 }
 
@@ -627,14 +676,11 @@ function viewHabits() {
   const [year, month] = state.habitMonth.split('-').map(Number);
   const daysInMonth = new Date(year, month, 0).getDate();
   const monthNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
-  
-  // Array de días [1, 2, 3 ... 30]
   const daysArray = Array.from({ length: daysInMonth }, (_, i) => i + 1);
 
   return `
     <div class="section-header">
       <h2>Hábitos</h2>
-      <button class="primary" onclick="newHabit()">+ Nuevo Hábito</button>
     </div>
 
     <div class="calendar-header">
@@ -644,7 +690,7 @@ function viewHabits() {
         <button class="btn-ghost" onclick="changeHabitMonth(1)">→</button>
       </div>
       <h3 style="margin:0; text-transform:uppercase; color:var(--accent);">${monthNames[month - 1]} ${year}</h3>
-      <div style="width: 120px;"></div> <!-- Espaciador para centrar el título -->
+      <div style="width: 120px;"></div>
     </div>
 
     <div class="habit-table-container">
@@ -673,8 +719,6 @@ function viewHabits() {
                 ${daysArray.map(d => {
                   const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
                   const isDone = habit.history && habit.history[dateStr];
-                  const isFuture = new Date(dateStr + 'T23:59:59') < new Date(); // Bloquear días futuros? Mejor dejarlo libre por ahora
-                  
                   return `<td>
                     <div class="habit-check ${isDone ? 'done' : ''}" onclick="toggleHabit('${habit.id}', '${dateStr}')"></div>
                   </td>`;
@@ -695,25 +739,20 @@ function viewHabits() {
    MÓDULO DE ENTRENAMIENTO (WORKOUTS)
 ============================================================= */
 
-function viewWorkouts() {
-  const tab = state.workoutTab || 'routines';
-  
+function viewTags() {
+  const set = new Set();
+  state.tasks.forEach(t => (t.tags || []).forEach(x => set.add(x)));
+  state.notes.forEach(n => (n.tags || []).forEach(x => set.add(x)));
+  const tags = [...set].sort();
   return `
-    <div class="section-header">
-      <h2>Entrenamiento</h2>
-      <div style="display:flex; gap:0.5rem;">
-        ${tab === 'routines' 
-          ? `<button class="primary" onclick="newWorkout()">+ Nueva Rutina</button>` 
-          : `<button class="btn-ghost" onclick="newExercise()">+ Ejercicio</button>`}
-      </div>
+    <h2>Etiquetas · ${tags.length}</h2>
+    <p style="font-size:12px; color:#666; margin-bottom:0.75rem;">Etiquetas libres para agrupar tareas y notas a través de proyectos.</p>
+    <div class="grid-auto">
+      ${tags.map(tag => {
+        const count = state.tasks.filter(t => (t.tags || []).includes(tag)).length + state.notes.filter(n => (n.tags || []).includes(tag)).length;
+        return `<div class="card" style="cursor:pointer;" onclick="openTag('${jsStr(tag)}')"><h3>#${escapeHtml(tag)}</h3><p style="font-size:12px;">${count} elementos</p></div>`;
+      }).join('') || '<div class="empty">Sin etiquetas todavía.</div>'}
     </div>
-
-    <div class="tabs" style="margin-bottom: 1.5rem;">
-      <button class="${tab === 'routines' ? 'active' : ''}" onclick="state.workoutTab='routines'; render();">Mis Rutinas</button>
-      <button class="${tab === 'library' ? 'active' : ''}" onclick="state.workoutTab='library'; render();">Biblioteca de Ejercicios</button>
-    </div>
-
-    ${tab === 'routines' ? viewRoutines() : viewExerciseLibrary()}
   `;
 }
 
@@ -1003,27 +1042,21 @@ async function deleteWorkout(id) {
 
 function viewWorkoutPerformance() {
   const sessions = state.workoutSessions || [];
-  
-  // 1. Calcular métricas generales
   let totalVolume = 0;
   let totalTime = 0;
   const volumeByMuscle = {};
 
   sessions.forEach(session => {
     totalTime += (session.duration || 0);
-    
     (session.blocks || []).forEach(block => {
       (block.exercises || []).forEach(ex => {
-        // Buscamos el músculo en la biblioteca
         const libEx = state.exercises.find(e => e.id === ex.exerciseId);
         const muscle = libEx ? libEx.muscle : 'Otros';
-
         (ex.sets || []).forEach(set => {
           if (set.done) {
             const w = parseFloat(set.weight) || 0;
             const r = parseFloat(set.reps) || 0;
             const vol = w * r;
-            
             totalVolume += vol;
             if (!volumeByMuscle[muscle]) volumeByMuscle[muscle] = 0;
             volumeByMuscle[muscle] += vol;
@@ -1033,34 +1066,24 @@ function viewWorkoutPerformance() {
     });
   });
 
-  // Ordenamos los músculos por volumen (de mayor a menor)
   const sortedMuscles = Object.entries(volumeByMuscle).sort((a, b) => b[1] - a[1]);
   const maxVol = sortedMuscles.length ? sortedMuscles[0][1] : 1;
-
-  // Historial ordenado del más reciente al más viejo
   const sortedSessions = [...sessions].sort((a, b) => new Date(b.startTime) - new Date(a.startTime));
 
   return `
-    <div class="section-header">
-      <h2>Rendimiento Entrenamientos</h2>
-    </div>
+    <h2>Rendimiento Entrenamientos</h2>
 
     <div class="grid-auto" style="margin-bottom: 2rem;">
-      <!-- Tarjeta de Sesiones -->
       <div class="card" style="display:flex; flex-direction:column; justify-content:center; align-items:center; min-height:120px;">
         <h3 style="color:var(--text-muted); margin:0; font-size:12px; text-transform:uppercase;">Sesiones Totales</h3>
         <div style="font-size:3rem; font-family:var(--font-display); color:var(--info); text-shadow:0 0 15px rgba(0,255,240,0.4);">${sessions.length}</div>
       </div>
-
-      <!-- Tarjeta de Tiempo -->
       <div class="card" style="display:flex; flex-direction:column; justify-content:center; align-items:center; min-height:120px;">
         <h3 style="color:var(--text-muted); margin:0; font-size:12px; text-transform:uppercase;">Tiempo en el Gym</h3>
         <div style="font-size:2.5rem; font-family:var(--font-display); color:var(--warning); text-shadow:0 0 15px rgba(255,176,0,0.4);">
           ${Math.floor(totalTime / 3600)}h ${Math.floor((totalTime % 3600) / 60)}m
         </div>
       </div>
-
-      <!-- Tarjeta de Volumen -->
       <div class="card" style="display:flex; flex-direction:column; justify-content:center; align-items:center; min-height:120px;">
         <h3 style="color:var(--text-muted); margin:0; font-size:12px; text-transform:uppercase;">Volumen Total</h3>
         <div style="font-size:2.5rem; font-family:var(--font-display); color:var(--accent); text-shadow:var(--glow-yellow);">
@@ -1070,7 +1093,6 @@ function viewWorkoutPerformance() {
     </div>
 
     <div style="display:grid; grid-template-columns: 1fr 2fr; gap:1rem; align-items:start;">
-      <!-- Panel de Distribución Muscular -->
       <div class="card">
         <h3>Volumen por Músculo</h3>
         <p style="font-size:11px; color:var(--text-muted); margin-bottom:1rem;">Distribución de tu esfuerzo acumulado.</p>
@@ -1088,19 +1110,15 @@ function viewWorkoutPerformance() {
         }).join('') : '<div class="empty">Sin datos suficientes.</div>'}
       </div>
 
-      <!-- Panel de Historial -->
       <div class="card">
         <h3>Historial de Sesiones</h3>
         <div style="display:flex; flex-direction:column; gap:0.5rem; margin-top:1rem;">
           ${sortedSessions.length ? sortedSessions.map(s => {
-            // Recalcular volumen de esta sesión específica
             let sVol = 0;
             (s.blocks || []).forEach(b => b.exercises.forEach(e => e.sets.forEach(set => {
               if (set.done) sVol += (parseFloat(set.weight)||0) * (parseFloat(set.reps)||0);
             })));
-
             const dateStr = new Date(s.startTime).toLocaleDateString('es-ES', { weekday:'long', day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' });
-            
             return `
               <div class="task-row" style="border-left:3px solid var(--accent); background:var(--surface-2); padding:0.75rem; border-radius:var(--radius-sm); align-items:flex-start; flex-direction:column; gap:0.3rem; cursor:pointer; transition: background 0.2s;" onmouseover="this.style.background='var(--surface-hover)'" onmouseout="this.style.background='var(--surface-2)'" onclick="openWorkoutSessionModal('${s.id}')">
                 <div style="display:flex; justify-content:space-between; width:100%;">
@@ -1317,6 +1335,70 @@ function viewFocusWorkout() {
               `).join('')}
             </div>
           `).join('')}
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+function viewWorkouts() {
+  const tab = state.workoutTab || 'routines';
+  return `
+    <div class="section-header">
+      <h2>Entrenamiento</h2>
+    </div>
+    
+    <div class="tabs" style="margin-bottom: 1.5rem;">
+      <button class="${tab === 'routines' ? 'active' : ''}" onclick="state.workoutTab='routines'; render();">Mis Rutinas</button>
+      <button class="${tab === 'library' ? 'active' : ''}" onclick="state.workoutTab='library'; render();">Biblioteca de Ejercicios</button>
+    </div>
+    ${tab === 'routines' ? viewRoutines() : viewExerciseLibrary()}
+  `;
+}
+
+function viewRoutines() {
+  return `
+    <div class="grid-auto">
+      ${(state.workouts || []).map(w => {
+        const totalEx = (w.blocks || []).reduce((acc, b) => acc + (b.exercises || []).length, 0);
+        return `
+          <div class="card" style="display:flex; flex-direction:column; justify-content:space-between;">
+            <div>
+              <h3 style="margin:0 0 0.5rem 0; color:var(--accent);">${escapeHtml(w.name)}</h3>
+              <p style="font-size:12px; color:var(--text-muted);">${(w.blocks || []).length} bloques · ${totalEx} ejercicios</p>
+            </div>
+            <div style="display:flex; gap:0.5rem; margin-top:1rem; border-top:1px solid var(--border); padding-top:0.5rem;">
+              <button class="primary" style="flex:2;" onclick="startWorkoutSession('${w.id}')">▶ Empezar</button>
+              <button class="btn-ghost" style="flex:1;" onclick="editWorkout('${w.id}')">Editar</button>
+              <button class="btn-danger" style="padding:2px 8px;" onclick="deleteWorkout('${w.id}')">×</button>
+            </div>
+          </div>
+        `;
+      }).join('') || '<div class="empty">No tenés rutinas creadas. ¡Armá tu primera Push Day!</div>'}
+    </div>
+  `;
+}
+
+function viewExerciseLibrary() {
+  const grouped = {};
+  state.exercises.forEach(ex => {
+    if (!grouped[ex.muscle]) grouped[ex.muscle] = [];
+    grouped[ex.muscle].push(ex);
+  });
+
+  return `
+    <div class="grid-auto">
+      ${Object.keys(grouped).sort().map(muscle => `
+        <div class="card">
+          <h3 style="color:var(--accent); border-bottom:1px solid var(--border); padding-bottom:0.5rem; margin-bottom:0.75rem;">${escapeHtml(muscle)}</h3>
+          <div style="display:flex; flex-direction:column; gap:0.4rem;">
+            ${grouped[muscle].map(ex => `
+              <div style="display:flex; justify-content:space-between; align-items:center; font-size:13px; padding:0.4rem; background:var(--surface-2); border-radius:var(--radius-sm);">
+                <span>${escapeHtml(ex.name)} <span style="font-size:10px; color:var(--text-muted);">(${escapeHtml(ex.equipment)})</span></span>
+                <button class="btn-ghost" onclick="deleteExercise('${ex.id}')" style="padding:2px 6px; color:var(--danger);" title="Eliminar">×</button>
+              </div>
+            `).join('')}
+          </div>
         </div>
       `).join('')}
     </div>
@@ -1563,28 +1645,20 @@ function viewCalendar() {
   let cellsHTML = '';
   
   if (state.calendarMode === 'month') {
-    // Configuración para vista mensual
     const firstDay = new Date(year, month, 1);
     const lastDay = new Date(year, month + 1, 0);
-    
-    // Ajustamos para que la semana empiece el Lunes (0 = Lunes, 6 = Domingo)
     let startDay = firstDay.getDay() === 0 ? 6 : firstDay.getDay() - 1; 
     const totalDays = lastDay.getDate();
-    
-    // Días del mes anterior para rellenar
     const prevMonthLastDay = new Date(year, month, 0).getDate();
+    
     for (let i = startDay - 1; i >= 0; i--) {
       const d = new Date(year, month - 1, prevMonthLastDay - i);
       cellsHTML += buildCalendarCell(d, true, today);
     }
-    
-    // Días del mes actual
     for (let i = 1; i <= totalDays; i++) {
       const d = new Date(year, month, i);
       cellsHTML += buildCalendarCell(d, false, today);
     }
-    
-    // Días del mes siguiente para completar la grilla (hasta 42 celdas)
     const totalCells = startDay + totalDays;
     const nextDays = totalCells % 7 === 0 ? 0 : 7 - (totalCells % 7);
     for (let i = 1; i <= nextDays; i++) {
@@ -1592,14 +1666,11 @@ function viewCalendar() {
       cellsHTML += buildCalendarCell(d, true, today);
     }
   } else {
-    // Configuración para vista semanal
-    const dayOfWeek = current.getDay() === 0 ? 6 : current.getDay() - 1; // 0 = Lunes
+    const dayOfWeek = current.getDay() === 0 ? 6 : current.getDay() - 1;
     const startOfWeek = new Date(current);
     startOfWeek.setDate(current.getDate() - dayOfWeek);
-    
     const endOfWeek = new Date(startOfWeek);
     endOfWeek.setDate(startOfWeek.getDate() + 6);
-    
     headerTitle = `${startOfWeek.getDate()} ${monthNames[startOfWeek.getMonth()]} - ${endOfWeek.getDate()} ${monthNames[endOfWeek.getMonth()]} ${endOfWeek.getFullYear()}`;
 
     for (let i = 0; i < 7; i++) {
@@ -1612,7 +1683,6 @@ function viewCalendar() {
   return `
     <div class="section-header">
       <h2>Calendario</h2>
-      <button class="primary" onclick="newEvent()">+ Evento</button>
     </div>
 
     <div class="calendar-header">
@@ -2024,9 +2094,7 @@ function viewPerformance() {
   let globalCount = 0;
 
   return `
-    <div class="section-header">
-      <h2>Rendimiento Escolar</h2>
-    </div>
+    <h2>Rendimiento Escolar</h2>
     
     <div class="card" style="margin-bottom:1rem;">
       <label>Seleccionar Plan Académico</label>
@@ -2036,7 +2104,6 @@ function viewPerformance() {
     </div>
 
     ${periods.map(period => {
-      // Cálculos del periodo
       let periodSum = 0;
       let periodCount = 0;
       
@@ -2046,7 +2113,6 @@ function viewPerformance() {
           const avg = validGrades.reduce((a, b) => a + b, 0) / validGrades.length;
           periodSum += avg;
           periodCount++;
-          
           globalSum += avg;
           globalCount++;
         }
@@ -2060,7 +2126,7 @@ function viewPerformance() {
             <h3 style="color: var(--accent); margin:0; text-transform: uppercase;">${escapeHtml(period.name || 'Sin Nombre')}</h3>
             <div style="font-size:1.2rem; font-weight:bold; color:var(--text);">Promedio Periodo: <span style="color:var(--warning); text-shadow:0 0 8px rgba(255,176,0,0.4);">${periodAvg}</span></div>
           </div>
-
+          <!-- ... Acá sigue el map de subjects, no lo borres ... -->
           ${(period.subjects || []).map(sub => {
             const subExams = sub.exams || [];
             const validGrades = subExams.map(e => parseFloat(e.grade)).filter(g => !isNaN(g));
