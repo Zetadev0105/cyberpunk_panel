@@ -59,6 +59,7 @@ const state = {
   settings: {
     workDuration: 25,
     breakDuration: 5,
+    restDuration: 90,
     shortcuts: { ...DEFAULT_SHORTCUTS },
     timerContext: { projectId: '', taskId: '' }
   },
@@ -66,6 +67,7 @@ const state = {
 };
 
 let restTimerInterval = null;
+let workoutChronoInterval = null;
 let restTimeRemaining = 0;
 
 let tempTimerCtx = null; // Variable temporal para el modal de destino
@@ -754,7 +756,7 @@ function viewExerciseLibrary() {
             ${grouped[muscle].map(ex => `
               <div style="display:flex; justify-content:space-between; align-items:center; font-size:13px; padding:0.4rem; background:var(--surface-2); border-radius:var(--radius-sm);">
                 <span>${escapeHtml(ex.name)} <span style="font-size:10px; color:var(--text-muted);">(${escapeHtml(ex.equipment)})</span></span>
-                ${ex.isCustom ? `<button class="btn-ghost" onclick="deleteExercise('${ex.id}')" style="padding:2px 6px; color:var(--danger);">×</button>` : ''}
+                <button class="btn-ghost" onclick="deleteExercise('${ex.id}')" style="padding:2px 6px; color:var(--danger);" title="Eliminar">×</button>
               </div>
             `).join('')}
           </div>
@@ -774,17 +776,33 @@ function newExercise() {
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.5rem;">
         <div>
           <label>Músculo Principal</label>
-          <input type="text" id="ex-muscle" required placeholder="Ej: Pecho, Espalda, Piernas" list="muscle-list">
-          <datalist id="muscle-list">
-            <option value="Pecho"><option value="Espalda"><option value="Piernas"><option value="Hombros"><option value="Bíceps"><option value="Tríceps"><option value="Core"><option value="Cardio">
-          </datalist>
+          <select id="ex-muscle" required onchange="toggleCustomExField('ex-muscle', 'ex-muscle-custom')">
+            <option value="" disabled selected>Seleccionar...</option>
+            <option value="Pecho">Pecho</option>
+            <option value="Espalda">Espalda</option>
+            <option value="Piernas">Piernas</option>
+            <option value="Hombros">Hombros</option>
+            <option value="Bíceps">Bíceps</option>
+            <option value="Tríceps">Tríceps</option>
+            <option value="Core">Core</option>
+            <option value="Cardio">Cardio</option>
+            <option value="Otro">Otro...</option>
+          </select>
+          <input type="text" id="ex-muscle-custom" placeholder="Escribí el músculo" style="display:none; margin-top:0.3rem;">
         </div>
         <div>
           <label>Equipamiento</label>
-          <input type="text" id="ex-equipment" required placeholder="Ej: Barra, Mancuernas" list="equip-list">
-          <datalist id="equip-list">
-            <option value="Barra"><option value="Mancuernas"><option value="Peso corporal"><option value="Máquina"><option value="Polea"><option value="Banda">
-          </datalist>
+          <select id="ex-equipment" required onchange="toggleCustomExField('ex-equipment', 'ex-equipment-custom')">
+            <option value="" disabled selected>Seleccionar...</option>
+            <option value="Barra">Barra</option>
+            <option value="Mancuernas">Mancuernas</option>
+            <option value="Peso corporal">Peso corporal</option>
+            <option value="Máquina">Máquina</option>
+            <option value="Polea">Polea</option>
+            <option value="Banda">Banda</option>
+            <option value="Otro">Otro...</option>
+          </select>
+          <input type="text" id="ex-equipment-custom" placeholder="Escribí el equipo" style="display:none; margin-top:0.3rem;">
         </div>
       </div>
 
@@ -796,13 +814,34 @@ function newExercise() {
   `);
 }
 
+function toggleCustomExField(selectId, inputId) {
+  const sel = document.getElementById(selectId);
+  const inp = document.getElementById(inputId);
+  if (sel.value === 'Otro') {
+    inp.style.display = 'block';
+    inp.required = true;
+    inp.focus();
+  } else {
+    inp.style.display = 'none';
+    inp.required = false;
+    inp.value = '';
+  }
+}
+
 async function submitExercise(e) {
   e.preventDefault();
+  
+  let muscle = document.getElementById('ex-muscle').value;
+  if (muscle === 'Otro') muscle = document.getElementById('ex-muscle-custom').value.trim();
+  
+  let equipment = document.getElementById('ex-equipment').value;
+  if (equipment === 'Otro') equipment = document.getElementById('ex-equipment-custom').value.trim();
+
   const ex = {
     id: uid(),
     name: document.getElementById('ex-name').value.trim(),
-    muscle: document.getElementById('ex-muscle').value.trim(),
-    equipment: document.getElementById('ex-equipment').value.trim(),
+    muscle,
+    equipment,
     isCustom: true
   };
   
@@ -1086,7 +1125,6 @@ function startWorkoutSession(routineId) {
   const routine = state.workouts.find(w => w.id === routineId);
   if (!routine) return;
 
-  // Clonamos la rutina para no modificar la original mientras entrenamos
   const session = {
     routineId: routine.id,
     name: routine.name,
@@ -1099,10 +1137,7 @@ function startWorkoutSession(routineId) {
         targetSets: ex.targetSets,
         targetReps: ex.targetReps,
         targetRir: ex.targetRir,
-        // Creamos las series "vacías" listas para llenar
-        sets: Array.from({ length: ex.targetSets }).map(() => ({
-          weight: '', reps: '', rir: '', done: false
-        }))
+        sets: Array.from({ length: ex.targetSets }).map(() => ({ weight: '', reps: '', rir: '', done: false }))
       }))
     }))
   };
@@ -1110,13 +1145,8 @@ function startWorkoutSession(routineId) {
   state.activeWorkout = session;
   state.view = 'workout_focus';
   render();
-}
-
-function cancelWorkoutSession() {
-  if (!confirm('¿Cancelar el entrenamiento actual? No se guardará el progreso.')) return;
-  state.activeWorkout = null;
-  state.view = 'workout';
-  render();
+  
+  startWorkoutChrono(session.startTime); // <-- NUEVO: Iniciar cronómetro
 }
 
 function viewFocusWorkout() {
@@ -1126,22 +1156,33 @@ function viewFocusWorkout() {
   return `
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
       <div>
-        <h2 style="margin:0;">${escapeHtml(session.name)}</h2>
-        <p style="font-size:12px; color:var(--text-muted);">Iniciado a las ${new Date(session.startTime).toLocaleTimeString()}</p>
+        <h2 style="margin:0; color:var(--accent);">${escapeHtml(session.name)}</h2>
+        <div style="display:flex; align-items:center; gap:0.5rem; margin-top:0.2rem; font-size:11px; color:var(--text-muted);">
+          <span>Descanso entre series:</span>
+          <input type="number" value="${state.settings.restDuration || 90}" onchange="state.settings.restDuration=parseInt(this.value); saveSettings();" style="width:50px; margin:0; padding:0.1rem; font-size:11px; text-align:center;">
+          <span>seg</span>
+        </div>
       </div>
       <div style="display:flex; gap:0.5rem;">
         <button class="btn-danger" onclick="cancelWorkoutSession()">Cancelar</button>
-        <button class="primary" onclick="finishWorkoutSession()">Terminar Entrenamiento</button>
+        <button class="primary" onclick="finishWorkoutSession()">Terminar</button>
       </div>
     </div>
 
-    <!-- CONTENEDOR DE TEMPORIZADOR DE DESCANSO -->
-    <div id="rest-timer-container" style="display:none; margin-bottom:1rem; background:var(--surface-2); border:1px solid var(--info); border-radius:var(--radius-md); padding:0.75rem; justify-content:space-between; align-items:center;">
-      <div style="font-size:1.2rem; color:var(--info); font-weight:bold; text-transform:uppercase; display:flex; align-items:center; gap:0.5rem;">
-        ⏱️ Descanso
+    <!-- PANEL DE RELOJES -->
+    <div style="display:flex; gap:1rem; margin-bottom:1rem;">
+      <!-- Reloj Total (Amarillo) -->
+      <div style="flex:1; background:var(--surface-2); border:1px solid var(--accent); border-radius:var(--radius-md); padding:0.5rem 1rem; display:flex; justify-content:space-between; align-items:center;">
+        <div style="font-size:1rem; color:var(--accent); font-weight:bold; text-transform:uppercase;">⏱️ Tiempo Total</div>
+        <div id="workout-chrono-display" style="font-size:1.8rem; font-family:var(--font-display); color:var(--accent); font-weight:bold; text-shadow:var(--glow-yellow);">00:00:00</div>
       </div>
-      <div id="rest-timer-display" style="font-size:2rem; font-family:var(--font-display); color:var(--accent); font-weight:bold; text-shadow:var(--glow-yellow);">01:30</div>
-      <button class="btn-ghost" onclick="stopRestTimer()">Saltar</button>
+      
+      <!-- Reloj Descanso (Cian - Oculto por defecto) -->
+      <div id="rest-timer-container" style="display:none; flex:1; background:var(--surface-2); border:1px solid var(--info); border-radius:var(--radius-md); padding:0.5rem 1rem; justify-content:space-between; align-items:center;">
+        <div style="font-size:1rem; color:var(--info); font-weight:bold; text-transform:uppercase;">⏳ Descanso</div>
+        <div id="rest-timer-display" style="font-size:1.8rem; font-family:var(--font-display); color:var(--info); font-weight:bold; text-shadow:var(--glow-cyan);">01:30</div>
+        <button class="btn-ghost" onclick="stopRestTimer()">Saltar</button>
+      </div>
     </div>
 
     <div style="display:flex; flex-direction:column; gap:1rem;">
@@ -1185,6 +1226,52 @@ function viewFocusWorkout() {
       `).join('')}
     </div>
   `;
+}
+
+function startWorkoutChrono(startTime) {
+  clearInterval(workoutChronoInterval);
+  const updateChrono = () => {
+    const display = document.getElementById('workout-chrono-display');
+    if (!display) return;
+    const diff = Math.floor((Date.now() - new Date(startTime).getTime()) / 1000);
+    const h = Math.floor(diff / 3600).toString().padStart(2, '0');
+    const m = Math.floor((diff % 3600) / 60).toString().padStart(2, '0');
+    const s = (diff % 60).toString().padStart(2, '0');
+    display.textContent = `${h}:${m}:${s}`;
+  };
+  updateChrono();
+  workoutChronoInterval = setInterval(updateChrono, 1000);
+}
+
+function stopWorkoutChrono() {
+  clearInterval(workoutChronoInterval);
+}
+
+function cancelWorkoutSession() {
+  if (!confirm('¿Cancelar el entrenamiento actual? No se guardará el progreso.')) return;
+  stopWorkoutChrono(); // <-- NUEVO
+  state.activeWorkout = null;
+  state.view = 'workout';
+  render();
+}
+
+async function finishWorkoutSession() {
+  if (!confirm('¿Terminar y guardar el entrenamiento?')) return;
+  stopWorkoutChrono(); // <-- NUEVO
+  // ... (el resto del código de guardado sigue igual)
+  const session = state.activeWorkout;
+  const endTime = new Date().toISOString();
+  const duration = Math.floor((new Date(endTime) - new Date(session.startTime)) / 1000);
+
+  const record = { /* ... */ };
+  await DB.put('workout_sessions', record);
+  state.workoutSessions.push(record);
+  state.activeWorkout = null;
+  stopRestTimer(); // Limpiar timer de descanso también
+  
+  state.view = 'workout';
+  render();
+  alert('¡Entrenamiento guardado con éxito, Choom!');
 }
 
 function updateWorkoutSet(bIdx, eIdx, sIdx, field, value) {
@@ -1237,16 +1324,17 @@ function updateRestTimerUI() {
   }
 }
 
+
+
 function toggleWorkoutSet(bIdx, eIdx, sIdx) {
   if (!state.activeWorkout) return;
   const set = state.activeWorkout.blocks[bIdx].exercises[eIdx].sets[sIdx];
   set.done = !set.done;
   
-  render(); // Refrescamos la pantalla para pintar el cuadradito
+  render();
   
-  // Si se marcó como hecho, arrancamos el descanso (90 segundos por defecto)
   if (set.done) {
-    startRestTimer(90);
+    startRestTimer(state.settings.restDuration || 90); // <-- Usa la variable
   }
 }
 
